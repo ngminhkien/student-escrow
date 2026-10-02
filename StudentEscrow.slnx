@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/StudentEscrow.API/StudentEscrow.API.csproj" />
+    <Project Path="backend/StudentEscrow.Application/StudentEscrow.Application.csproj" />
+    <Project Path="backend/StudentEscrow.Domain/StudentEscrow.Domain.csproj" />
+    <Project Path="backend/StudentEscrow.Infrastructure/StudentEscrow.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StudentEscrow.Application.Tests/StudentEscrow.Application.Tests.csproj" />
+  </Folder>
+</Solution>
