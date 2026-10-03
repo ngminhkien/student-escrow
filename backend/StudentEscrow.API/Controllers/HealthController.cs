@@ -12,7 +12,7 @@ public sealed class HealthController(StudentEscrowDbContext database) : Controll
 {
     [HttpGet("live")]
     [ProducesResponseType<HealthResponse>(StatusCodes.Status200OK)]
-    public ActionResult<HealthResponse> Live() => Ok(new HealthResponse("healthy", "api", "01-backend-foundation"));
+    public ActionResult<HealthResponse> Live() => Ok(new HealthResponse("healthy", "api", "02-wallet-kyc"));
 
     [HttpGet("ready")]
     [ProducesResponseType<HealthResponse>(StatusCodes.Status200OK)]
@@ -24,15 +24,18 @@ public sealed class HealthController(StudentEscrowDbContext database) : Controll
             var pending = await database.Database.GetPendingMigrationsAsync(cancellationToken);
             if (pending.Any() || !await database.Database.CanConnectAsync(cancellationToken))
             {
-                return StatusCode(503, new HealthResponse("unhealthy", "database", "01-backend-foundation"));
+                return StatusCode(503, new HealthResponse("unhealthy", "database", "02-wallet-kyc"));
             }
 
             await database.Users.AsNoTracking().Select(user => user.Id).Take(1).ToListAsync(cancellationToken);
-            return Ok(new HealthResponse("healthy", "database", "01-backend-foundation"));
+            await database.WalletLinks.AsNoTracking().Select(wallet => wallet.Id).Take(1).ToListAsync(cancellationToken);
+            await database.WalletChallenges.AsNoTracking().Select(challenge => challenge.Id).Take(1).ToListAsync(cancellationToken);
+            await database.KycSubmissions.AsNoTracking().Select(kyc => kyc.Id).Take(1).ToListAsync(cancellationToken);
+            return Ok(new HealthResponse("healthy", "database", "02-wallet-kyc"));
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return StatusCode(503, new HealthResponse("unhealthy", "database", "01-backend-foundation"));
+            return StatusCode(503, new HealthResponse("unhealthy", "database", "02-wallet-kyc"));
         }
     }
 }

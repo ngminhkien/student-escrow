@@ -10,6 +10,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using StudentEscrow.API.Common;
 using StudentEscrow.Application.Auth;
+using StudentEscrow.Application.Wallets;
+using StudentEscrow.Application.Kyc;
+using StudentEscrow.Infrastructure.Wallets;
 using StudentEscrow.Infrastructure.Auth;
 using StudentEscrow.Infrastructure.Persistence;
 
@@ -45,6 +48,30 @@ builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+var walletSettings = builder.Configuration.GetSection("Wallet").Get<WalletSettings>() ?? new WalletSettings();
+if (!Uri.TryCreate(walletSettings.Uri, UriKind.Absolute, out var walletUri)
+    || walletUri.Authority != walletSettings.Domain || walletSettings.Domain.Contains('\n')
+    || walletSettings.Domain.Contains('\r') || !string.IsNullOrEmpty(walletUri.UserInfo)
+    || walletUri.Scheme is not ("http" or "https")
+    || (!builder.Environment.IsDevelopment() && walletUri.Scheme != "https")
+    || walletSettings.ChallengeLifetimeMinutes is < 1 or > 10
+    || walletSettings.AllowedChainIds.Length == 0
+    || walletSettings.AllowedChainIds.Any(chainId => chainId is not (31337 or 11155111)))
+{
+    throw new InvalidOperationException("Invalid wallet domain, URI, chain IDs or challenge lifetime configuration.");
+}
+var kycSettings = builder.Configuration.GetSection("Kyc").Get<KycSettings>() ?? new KycSettings();
+if (kycSettings.EnableMockVerification && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException("Mock KYC is allowed only in Development.");
+}
+builder.Services.AddSingleton(walletSettings);
+builder.Services.AddSingleton(kycSettings);
+builder.Services.AddSingleton<IWalletSignatureVerifier, EthereumSignatureVerifier>();
+builder.Services.AddScoped<IWalletRepository, WalletRepository>();
+builder.Services.AddScoped<IWalletService, WalletService>();
+builder.Services.AddScoped<IKycRepository, KycRepository>();
+builder.Services.AddScoped<IKycService, KycService>();
 builder.Services.AddDbContext<StudentEscrowDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -96,6 +123,15 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
             AutoReplenishment = true
         }));
+    options.AddPolicy("wallet-kyc", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.StatusCode = 429;
@@ -110,7 +146,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "StudentEscrow API",
         Version = "v1",
-        Description = "Phần 1: backend nền tảng, tài khoản và JWT. Chưa có giao dịch blockchain, KYC hoặc AI."
+        Description = "Phần 2: tài khoản/JWT, liên kết ví EOA bằng chữ ký và KYC mock. VERIFIED chỉ là mô phỏng trong SQL; chưa có xác minh on-chain, giao dịch tiền hoặc AI."
     });
     options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
     {
@@ -168,8 +204,8 @@ else
     app.UseHttpsRedirection();
 }
 
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();

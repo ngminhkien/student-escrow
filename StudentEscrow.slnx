@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/StudentEscrow.Application.Tests/StudentEscrow.Application.Tests.csproj" />
+    <Project Path="tests/StudentEscrow.ApiSmoke/StudentEscrow.ApiSmoke.csproj" />
   </Folder>
 </Solution>

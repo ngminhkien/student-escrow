@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StudentEscrow.Infrastructure.Persistence;
 
@@ -11,9 +12,10 @@ using StudentEscrow.Infrastructure.Persistence;
 namespace StudentEscrow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(StudentEscrowDbContext))]
-    partial class StudentEscrowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261002065603_WalletProofAndMockKyc")]
+    partial class WalletProofAndMockKyc
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
