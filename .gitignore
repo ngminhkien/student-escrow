@@ -20,3 +20,4 @@
 **/coverage/
 /blockchain/artifacts/
 /blockchain/cache/
+/blockchain/deployment/local/

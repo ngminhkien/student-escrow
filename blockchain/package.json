@@ -1,0 +1,26 @@
+{
+  "name": "student-escrow-blockchain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0 <23 || >=24.0.0 <25" },
+  "scripts": {
+    "build": "hardhat build",
+    "test": "hardhat test nodejs",
+    "test:coverage": "hardhat test nodejs --coverage",
+    "typecheck": "tsc --noEmit",
+    "node": "hardhat node --hostname 127.0.0.1",
+    "deploy:local": "hardhat run deployment/deploy-local.ts --network localhost --no-compile",
+    "smoke:local": "hardhat run deployment/smoke-local.ts --network localhost --no-compile",
+    "export:abi": "hardhat run deployment/export-abi.ts --no-compile"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "4.2.0",
+    "@nomicfoundation/hardhat-node-test-runner": "3.1.0",
+    "@openzeppelin/contracts": "5.6.1",
+    "@types/node": "22.20.5",
+    "ethers": "6.17.0",
+    "hardhat": "3.18.1",
+    "typescript": "5.9.3"
+  }
+}
