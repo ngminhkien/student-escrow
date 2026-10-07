@@ -14,6 +14,7 @@ public sealed class StudentEscrowDbContext(DbContextOptions<StudentEscrowDbConte
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        StudentEscrow.Infrastructure.Orders.EscrowModel.Configure(modelBuilder);
         var user = modelBuilder.Entity<User>();
         user.ToTable("Users");
         user.HasKey(entity => entity.Id);

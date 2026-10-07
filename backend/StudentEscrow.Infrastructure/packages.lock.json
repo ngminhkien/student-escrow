@@ -18,6 +18,16 @@
           "Microsoft.EntityFrameworkCore.Relational": "10.0.10"
         }
       },
+      "Nethereum.JsonRpc.RpcClient": {
+        "type": "Direct",
+        "requested": "[6.1.0, )",
+        "resolved": "6.1.0",
+        "contentHash": "En6QKNPToPPwpY0MT+tg8brQoA8rhoDpF9y4OhWbOwUcq52zZrWFnXMCltPx842fHZsTgLvbr5Y/3i2aSHxOAQ==",
+        "dependencies": {
+          "Nethereum.JsonRpc.Client": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
       "Nethereum.Signer": {
         "type": "Direct",
         "requested": "[6.1.0, )",
@@ -217,6 +227,15 @@
         "resolved": "6.1.0",
         "contentHash": "GdXoJK9rzlCbpuurwcXiA8zHpH4aUR0tEhxuz1+5ZjbJNgUTFvDyAo0RdymeKXnIpxF5Y6rV7Cj+FjCISPNdbQ==",
         "dependencies": {
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.JsonRpc.Client": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "HQPnxPDL8ZddHjrMjJ3nytkRSNXpRd+5hcgEkuidOqb2wHX6zSjcUgOrtGq5qTSQ0lURp/1V3OQmpHM3pgRoFA==",
+        "dependencies": {
+          "Nethereum.Hex": "6.1.0",
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
         }
       },

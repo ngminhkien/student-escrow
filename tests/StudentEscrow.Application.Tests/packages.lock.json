@@ -583,6 +583,25 @@
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
         }
       },
+      "Nethereum.JsonRpc.Client": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "HQPnxPDL8ZddHjrMjJ3nytkRSNXpRd+5hcgEkuidOqb2wHX6zSjcUgOrtGq5qTSQ0lURp/1V3OQmpHM3pgRoFA==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "6.0.0",
+          "Nethereum.Hex": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.JsonRpc.RpcClient": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "En6QKNPToPPwpY0MT+tg8brQoA8rhoDpF9y4OhWbOwUcq52zZrWFnXMCltPx842fHZsTgLvbr5Y/3i2aSHxOAQ==",
+        "dependencies": {
+          "Nethereum.JsonRpc.Client": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
       "Nethereum.Model": {
         "type": "Transitive",
         "resolved": "6.1.0",
@@ -782,6 +801,7 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.6.2, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Nethereum.JsonRpc.RpcClient": "[6.1.0, )",
           "Nethereum.Signer": "[6.1.0, )",
           "Newtonsoft.Json": "[13.0.4, )",
           "StudentEscrow.Application": "[1.0.0, )",

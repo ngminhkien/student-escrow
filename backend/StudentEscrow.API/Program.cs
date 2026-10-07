@@ -15,6 +15,8 @@ using StudentEscrow.Application.Kyc;
 using StudentEscrow.Infrastructure.Wallets;
 using StudentEscrow.Infrastructure.Auth;
 using StudentEscrow.Infrastructure.Persistence;
+using StudentEscrow.Application.Orders;
+using StudentEscrow.Infrastructure.Orders;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -73,6 +75,19 @@ builder.Services.AddScoped<IWalletService, WalletService>();
 builder.Services.AddScoped<IKycRepository, KycRepository>();
 builder.Services.AddScoped<IKycService, KycService>();
 builder.Services.AddDbContext<StudentEscrowDbContext>(options => options.UseSqlServer(connectionString));
+var blockchain = builder.Configuration.GetSection("Blockchain").Get<BlockchainSettings>() ?? new BlockchainSettings();
+if (blockchain.PollSeconds is < 1 or > 60 || blockchain.BatchSize is < 1 or > 100
+    || blockchain.Confirmations is < 0 or > 100
+    || !Uri.TryCreate(blockchain.RpcUrl, UriKind.Absolute, out var rpcUri) || rpcUri.Scheme is not ("http" or "https")
+    || (blockchain.Enabled && (!builder.Environment.IsDevelopment() || !rpcUri.IsLoopback)))
+    throw new InvalidOperationException("Part 04 supports Development and loopback RPC only; check Blockchain settings.");
+blockchain.ManifestPath = Path.GetFullPath(blockchain.ManifestPath, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton(blockchain);
+builder.Services.AddSingleton<ManifestProvider>();
+builder.Services.AddSingleton<IBlockchainSource, NethereumSource>();
+builder.Services.AddScoped<BlockchainSync>();
+builder.Services.AddHostedService<BlockchainWorker>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
@@ -114,6 +129,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy("orders", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 240, Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0, AutoReplenishment = true }));
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
@@ -146,7 +165,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "StudentEscrow API",
         Version = "v1",
-        Description = "Phần 2: tài khoản/JWT, liên kết ví EOA bằng chữ ký và KYC mock. VERIFIED chỉ là mô phỏng trong SQL; chưa có xác minh on-chain, giao dịch tiền hoặc AI."
+        Description = "Phần 4: tài khoản/ví/KYC mock, bản nháp đơn, file/SHA-256 và worker đồng bộ contract local vào SQL. Client ký giao dịch; API không giữ private key. KYC mock không tự xác minh ví on-chain."
     });
     options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
     {

@@ -1,6 +1,6 @@
 # StudentEscrow — phần 03: blockchain local
 
-Smart contract giữ ETH test và quản lý vòng đời đơn. Phần này chạy độc lập trên Hardhat local; worker SQL, React/MetaMask và Sepolia thuộc các phần tiếp theo.
+Smart contract giữ ETH test và quản lý vòng đời đơn. Phần này chạy độc lập trên Hardhat local; worker SQL và API/file đã có ở [phần 04](../backend/ORDERS.md), kiểm thử bằng `npm.cmd run smoke:api`. Giao diện React/MetaMask ở [phần 05](../frontend/README.md). Sepolia thuộc phần sau.
 
 ## Cài và kiểm thử
 

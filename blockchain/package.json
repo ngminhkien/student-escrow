@@ -12,6 +12,8 @@
     "node": "hardhat node --hostname 127.0.0.1",
     "deploy:local": "hardhat run deployment/deploy-local.ts --network localhost --no-compile",
     "smoke:local": "hardhat run deployment/smoke-local.ts --network localhost --no-compile",
+    "smoke:api": "hardhat run deployment/smoke-api.ts --network localhost --no-compile",
+    "verify:api": "hardhat run deployment/verify-api.ts --network localhost --no-compile",
     "export:abi": "hardhat run deployment/export-abi.ts --no-compile"
   },
   "devDependencies": {

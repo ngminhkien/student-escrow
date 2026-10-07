@@ -8,7 +8,11 @@
 
 **02 – Liên kết ví và KYC mock đã đạt gate (TV2 + TV4):** ví EOA ký challenge một lần, chống replay/hết hạn/chiếm ví; KYC có PASS/REJECTED và API chỉ xem hồ sơ của chính tài khoản. Ngày 04/10/2026, agent chạy backend ngoài sandbox và cả hai smoke script trên SQL thật đều PASS, gồm các request đồng thời và kiểm tra persistence. Trong sandbox vẫn gặp SSPI.
 
-**03 – Blockchain local đã đạt gate (TV1 + TV5):** Solidity/Hardhat, xác minh ví on-chain bằng quyền Admin, đủ vòng đời ký quỹ ETH test, phí 1%, tranh chấp chia tỷ lệ và hai timeout. 71 test PASS; coverage Escrow.sol 100% dòng/câu lệnh. Deploy và bốn luồng smoke trên node local PASS, đối chiếu số dư/gas. ABI, đặc tả và hướng dẫn ở [blockchain/README.md](blockchain/README.md) và [blockchain/DESIGN.md](blockchain/DESIGN.md). Chưa tích hợp contract vào API/SQL, chưa có frontend, AI hoặc deploy Sepolia.
+**03 – Blockchain local đã đạt gate (TV1 + TV5):** Solidity/Hardhat, xác minh ví on-chain bằng quyền Admin, đủ vòng đời ký quỹ ETH test, phí 1%, tranh chấp chia tỷ lệ và hai timeout. 71 test PASS; coverage Escrow.sol 100% dòng/câu lệnh. Deploy và bốn luồng smoke trên node local PASS, đối chiếu số dư/gas. ABI, đặc tả và hướng dẫn ở [blockchain/README.md](blockchain/README.md) và [blockchain/DESIGN.md](blockchain/DESIGN.md).
+
+**04 – Draft/file/hash và Nethereum worker đã đạt gate local:** API tạo draft bất biến, lưu file theo quyền/quota, tính SHA-256; worker đọc contract local vào SQL với checkpoint, dedup, restart và phục hồi reorg. Ngày 06/10/2026: 64/64 test .NET PASS gồm SQL thật; smoke API/blockchain, restart và hồi quy auth/ví/KYC PASS. Hướng dẫn chạy, API, cấu hình và giới hạn ở [backend/ORDERS.md](backend/ORDERS.md).
+
+**05 – React/MetaMask, giao diện trắng–đen:** tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Build, 8 test logic và browser E2E với API/SQL/Hardhat thật PASS; EIP-1193 trong test mô phỏng popup ví, cần thử MetaMask extension thật khi demo. Hướng dẫn [chạy và test chung phần 4–5](frontend/README.md). Ví ký phía client; server không giữ private key. AI và Sepolia chưa triển khai.
 
 Ghi chú tiến độ và hướng dẫn Swagger chi tiết nằm trong `docs/` trên máy phát triển, không được push. Các bước chạy và kiểm tra API cần thiết nằm ngay trong README này.
 
@@ -21,7 +25,7 @@ Người dùng đã chốt phạm vi: **ETH test + thuê thiết kế/lập trì
 - Bàn giao chính: **một ZIP tối đa 50 MB** chứa HTML/CSS/JavaScript, tài nguyên cần thiết và README; không kèm node_modules, .git hoặc cache. Bản demo mẫu có các mục giới thiệu, dịch vụ, bảng giá và liên hệ, hiển thị được trên desktop/mobile; không bao gồm backend, database hoặc hosting trong sản phẩm thuê.
 - Bằng chứng: **PNG/JPG/JPEG/PDF, tối đa 5 MB/file, 5 file/đơn**; tổng sản phẩm và bằng chứng tối đa **75 MB/đơn**. Quy ước MB = 1.000.000 byte; giới hạn áp dụng cho nội dung file, không tính multipart overhead.
 - File lưu ngoài blockchain, truy cập theo quyền của đơn. Blockchain chỉ lưu SHA-256 của byte file bàn giao. Phiên bản đã gắn với Delivered không được ghi đè. Server không tự giải nén hoặc chạy sản phẩm upload; Buyer/Arbiter nghiệm thu theo điều khoản, không theo việc upload thành công.
-- **Các giới hạn upload là đặc tả đã chốt cho phần 04, chưa có API triển khai.** Contract phần 03 hiện nhận bytes32 hash và không kiểm tra định dạng/dung lượng file. Smoke hiện hash chuỗi fixture trong bộ nhớ, chưa upload ZIP thật.
+- **API phần 04 đã áp dụng giới hạn upload và quyền theo đơn.** `smoke:api` upload ZIP thật; `smoke:local` vẫn dùng hash fixture để kiểm tra contract độc lập. Contract nhận bytes32 hash, không tự kiểm tra định dạng/dung lượng file.
 
 Quy chuẩn chi tiết và kịch bản test cục bộ: `docs/DEMO_SCOPE_AND_TEST_SCENARIOS.md`, bản đọc PDF `docs/StudentEscrow_Quy_chuan_demo_va_kich_ban_test.pdf`. Thư mục docs được gitignore; các quy tắc chính ở mục này vẫn đi cùng repo.
 
@@ -146,7 +150,8 @@ backend/      API / Application / Domain / Infrastructure
 tests/        test auth/ví/KYC và chương trình smoke HTTP có ký Ethereum
 scripts/      chọn SDK, chạy backend, smoke test HTTP
 blockchain/   contract Solidity, test Hardhat, ABI, deploy và smoke local
+frontend/     React/MetaMask, giao diện demo trắng–đen và test trình duyệt
 docs/         ghi chú cục bộ, không push
 ```
 
-`frontend` và `analytics` sẽ được thêm khi đến phần tương ứng. Bước kế tiếp là phần 04: draft/file/hash và Nethereum worker đồng bộ event vào SQL với checkpoint, dedup, restart và reorg; contract vẫn là nguồn sự thật cho tiền/trạng thái.
+`frontend/` chứa React/MetaMask và giao diện các vai trò ở phần 05. Phần 04 nối API/file với contract qua Nethereum worker; contract vẫn là nguồn sự thật cho tiền/trạng thái. Bước kế tiếp là phần 06: analytics/ML.NET; `analytics` chưa triển khai.
