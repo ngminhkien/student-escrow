@@ -83,13 +83,14 @@ export default function App() {
       <div><strong>Blockchain: {network.status}</strong><span className="muted"> · Block SQL {network.lastIndexedBlock ?? "—"}</span>
         {network.contractAddress && <div className="small mono" title={network.contractAddress}>Contract {network.contractAddress}</div>}</div>
       <div className="row">
-        {wallet.account && <span className="mono" title={wallet.account}>{short(wallet.account)}</span>}
+        {wallet.account && <span className="mono" title={wallet.account}>MetaMask: {short(wallet.account)}</span>}
         <button disabled={!!busy} onClick={() => void run("Kết nối ví", wallet.connect)}>{wallet.account ? "Kết nối lại ví" : "Kết nối MetaMask"}</button>
+        {wallet.account && <button className="secondary" disabled={!!busy} onClick={() => void run("Chọn ví MetaMask", wallet.changeAccount)}>Đổi ví MetaMask</button>}
         {wallet.chainId !== "31337" && <button className="secondary" disabled={!!busy || !wallet.available} onClick={() => void run("Chuyển mạng", wallet.switchNetwork)}>Chuyển sang mạng local</button>}
       </div>
     </section>
     {wallet.account && wallet.chainId !== "31337" && <p className="banner" role="alert">Sai mạng ({wallet.chainId || "chưa xác định"}). Cần chain 31337 trước khi ký.</p>}
-    {linked?.linked && wallet.account && !matched && <p className="banner" role="alert">Ví đang chọn khác ví liên kết tài khoản: <span className="mono">{linked.address}</span>. Chuyển đúng ví hoặc đăng nhập tài khoản tương ứng.</p>}
+    {linked?.linked && wallet.account && !matched && <p className="banner" role="alert">Ví đang chọn khác ví liên kết tài khoản: <span className="mono">{linked.address}</span>. Bấm “Đổi ví MetaMask” và chọn địa chỉ này. Đăng nhập ứng dụng không tự chuyển ví trong MetaMask.</p>}
     {network.status !== "Ready" && <p className="banner">Chưa thể gửi giao dịch. Kiểm tra node local, deploy contract và API có bật worker. <a href="http://localhost:5180/swagger" target="_blank" rel="noreferrer">Mở Swagger</a></p>}
     <nav aria-label="Chức năng">
       <button className={tab === "account" ? "active" : "secondary"} onClick={() => setTab("account")}>Tài khoản & ví</button>

@@ -81,7 +81,13 @@ export function useWallet() {
     }
     await refresh();
   }
-  return { account, chainId, available, connect, switchNetwork, refresh };
+  async function changeAccount() {
+    const provider = injected();
+    if (!provider) throw new Error("Chưa tìm thấy MetaMask. Mở khóa ví rồi tải lại trang.");
+    await provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
+    await refresh();
+  }
+  return { account, chainId, available, connect, changeAccount, switchNetwork, refresh };
 }
 
 export async function assertWallet(expected: string) {

@@ -54,9 +54,10 @@ export default function AccountPanel({ session, account, canSign, network, busy,
     <section className="panel"><h2>Tài khoản & liên kết ví</h2><p>{session.user.fullName} · {session.user.email}</p>
       {error && <p role="alert">{error}</p>}
       <dl><dt>Ví liên kết</dt><dd className="mono">{wallet?.address ?? "Chưa liên kết"}</dd><dt>Mạng của ví liên kết</dt><dd>{wallet?.chainId ?? "—"}</dd></dl>
-      {!wallet?.linked && <><p>Ký thông điệp một lần để chứng minh bạn sở hữu ví đang chọn; thao tác này không chuyển ETH.</p>
+      <dl><dt>Ví đang chọn trong MetaMask</dt><dd className="mono">{account || "Chưa kết nối"}</dd></dl>
+      {!wallet?.linked && <><p>Kiểm tra địa chỉ ví ở trên trước khi ký. Nếu muốn dùng ví khác, bấm “Đổi ví MetaMask”. Ký thông điệp một lần để chứng minh bạn sở hữu ví đang chọn; thao tác này không chuyển ETH và không tốn gas.</p>
         <button disabled={busy || !canSign || !wallet} onClick={() => void run("Liên kết ví", link)}>Ký và liên kết ví</button></>}
-      {wallet?.linked && <p>Ví đã liên kết cố định. Muốn dùng vai trò khác, đăng nhập tài khoản có ví tương ứng.</p>}
+      {wallet?.linked && <p>Ví đã liên kết cố định. Để dùng ví khác cho tài khoản mới: đăng xuất, đăng ký bằng email khác, bấm “Đổi ví MetaMask” chọn ví chưa liên kết, rồi ký liên kết ví. Mỗi ví chỉ liên kết với một tài khoản.</p>}
       <hr /><h3>Xác minh on-chain</h3><p>{verified === null ? "Chưa đọc được trạng thái contract." : verified ? "Đã được Admin xác minh trên contract hiện tại." : "Chưa được Admin xác minh trên contract hiện tại."}</p>
       <p className="muted">Buyer và Seller cần xác minh on-chain để tạo/nạp đơn. KYC mock bên cạnh không tự cấp quyền này. Sau khi deploy lại, Admin cần xác minh lại.</p>
     </section>
