@@ -1,10 +1,10 @@
-# Phần 05 — React + MetaMask, giao diện demo tối giản
+# StudentEscrow Frontend — React + TypeScript + MetaMask
 
 Giao diện trắng/đen, tập trung thao tác đủ phần 01–05. React + TypeScript + Vite + ethers; không có UI framework, không thêm ảnh hoặc animation. API và smart contract vẫn quyết định quyền/trạng thái. File ABI được import trực tiếp từ `blockchain/deployment/Escrow.abi.json`, không duy trì một bản ABI riêng.
 
 ## Chạy cả phần 4 và 5
 
-Dùng Node 22.13+ trong dòng 22 (máy phát triển: 22.14.0), SQL Server và .NET theo README gốc. Các lệnh sau chạy từ gốc `student-escrow` trừ khi đã `cd`.
+Dùng Node 22.13+ trong dòng 22 hoặc Node 24.x (theo `engines` trong `package.json`), SQL Server và .NET theo README gốc. Các lệnh sau chạy từ gốc `student-escrow` trừ khi đã `cd`.
 
 **Chuẩn bị một lần hoặc sau khi cập nhật dependencies:**
 
@@ -57,7 +57,7 @@ Mở **http://127.0.0.1:5173**. Header phải hiển thị `Blockchain: Ready`. 
 
 Có thể dùng một trình duyệt và lần lượt đăng xuất/đăng nhập + đổi ví. Hoặc dùng nhiều profile/tab: phiên JWT lưu trong sessionStorage theo tab; chọn ví MetaMask có thể tác động các tab nên luôn xem cảnh báo đúng/sai ví trước khi ký. Ví đã liên kết trong SQL từ lần test trước thì tiếp tục dùng tài khoản đó; reset node không xóa liên kết SQL.
 
-**Admin xác minh Buyer/Seller:** chọn ví #0, vào mục **Admin**, nhập từng địa chỉ ví rồi bấm **Xác minh ví** và xác nhận MetaMask. Admin không cần đăng nhập JWT để dùng quyền contract. Có thể tra cứu/thu hồi xác minh, cấp/thu hồi KYC_ADMIN_ROLE bằng ví có DEFAULT_ADMIN_ROLE. Quyền đọc trực tiếp từ contract và được contract kiểm tra lại khi giao dịch thực thi. Không có hàng đợi phê duyệt giấy tờ thật hoặc đồng bộ tự động KYC mock.
+**Admin xác minh Buyer/Seller:** chọn ví #0, vào mục **Quản trị blockchain**, nhập từng địa chỉ ví, bấm **Tra cứu**, kiểm tra kết quả rồi bấm **Xác minh ví** và xác nhận MetaMask. Khi đổi địa chỉ, cần tra cứu lại trước khi xác minh, thu hồi hoặc phân quyền. Admin không cần đăng nhập JWT để dùng quyền contract. Có thể tra cứu/thu hồi xác minh, cấp/thu hồi KYC_ADMIN_ROLE bằng ví có DEFAULT_ADMIN_ROLE. Quyền đọc trực tiếp từ contract và được contract kiểm tra lại khi giao dịch thực thi. Không có hàng đợi phê duyệt giấy tờ thật hoặc đồng bộ tự động KYC mock.
 
 ## Một luồng hoàn chỉnh để test chung 4–5
 
@@ -109,8 +109,52 @@ npm.cmd run test:e2e
 
 Để test riêng phần 4, dùng [hướng dẫn backend](../backend/ORDERS.md), `scripts/test-orders-sql.ps1` và lệnh `npm.cmd run smoke:api` trong thư mục `blockchain`. Không chạy smoke reorg/time-travel cùng lúc đang demo UI trên cùng node.
 
-## Cấu trúc để chỉnh FE tiếp
+## Cấu trúc và hướng phụ thuộc
 
-`src/App.tsx`: phiên đăng nhập, navigation, kết nối và lịch sử giao dịch. `AccountPanel.tsx`, `OrdersPanel.tsx`, `AdminPanel.tsx`: ba màn hình. `api.ts`: gọi API. `wallet.ts`: adapter MetaMask/RPC/giao dịch. `rules.ts`: quyền và deadline, xử lý wei/bps chính xác. `styles.css`: toàn bộ giao diện trắng–đen; có responsive 375 px. Có thể thay CSS/layout mà không phải sửa logic contract.
+```text
+src/
+  app/                    App, AppShell, quản lý phiên và readiness
+  features/
+    auth/                 Đăng nhập/đăng ký
+    account/              Hồ sơ, liên kết ví, KYC mock
+    orders/               Danh sách, draft, chi tiết, thao tác, file, sự kiện
+    admin/                Quyền và xác minh ví trực tiếp trên contract
+    transactions/         Nhật ký giao dịch của ví hiện tại
+  services/               auth, account, orders, health: endpoint và DTO
+  infrastructure/
+    http/                 Transport dùng chung, lỗi API, timeout/cancellation
+    wallet/               Khám phá provider, chọn ví, RPC, ký giao dịch
+  domain/                 Kiểu dữ liệu, số học wei/bps, quyền và deadline
+  shared/                 Định dạng, feedback và các UI component nhỏ
+  main.tsx                Điểm khởi động React
+  styles.css              Design tokens, layout và responsive
+```
 
-Tài liệu chính thức tham khảo: [Vite proxy](https://vite.dev/config/server-options), [ethers v6](https://docs.ethers.org/v6/single-page/), [MetaMask network management](https://docs.metamask.io/metamask-connect/evm/guides/manage-networks/).
+`app` ghép các tính năng; `features` dùng `services`, `domain`, ví và `shared`; `services` dùng HTTP transport và kiểu domain. `domain` và `shared` độc lập với màn hình. Các file gốc `api.ts`, `types.ts`, `rules.ts`, `wallet.ts` và các panel cũ giữ vai trò adapter tương thích; khi thêm chức năng, đặt code vào module tương ứng.
+
+API dùng đường dẫn cùng origin `/api`; chỉ một transport xử lý Bearer token, lỗi HTTP, JSON lỗi/rỗng, response nhị phân, timeout và hủy request. `ApiError` giữ `status`, `code`, `message`, `traceId` khi backend cung cấp. Upload để trình duyệt tự tạo multipart boundary. Không tự retry thao tác ghi. Timeout mặc định 60 giây; caller có thể hủy request mà vẫn giữ timeout. Health blockchain đọc được payload 503 để hiển thị trạng thái thực tế.
+
+JWT lưu trong `sessionStorage` theo tab, có thời hạn và được xóa khi đăng xuất/hết hạn. HTTP 401 của token cũ không đăng xuất phiên mới. Đăng nhập ứng dụng và chọn ví là hai bước độc lập. Contract và API kiểm tra quyền; điều kiện khóa nút trên frontend chỉ hỗ trợ người dùng. Số tiền dùng chuỗi wei/`bigint`; SHA-256 điều khoản tính trên nguyên chuỗi canonical do API trả về. Transaction receipt xác nhận giao dịch; trạng thái đơn vẫn chờ API/worker cập nhật.
+
+Danh sách đơn phân trang thật theo offset, tối đa 50 đơn/trang; bộ lọc/tìm kiếm chỉ áp dụng trên trang đã tải. Lịch sử lấy tối đa 100 sự kiện/trang. Có thể mở đơn qua `?order=UUID`; API vẫn kiểm tra quyền truy cập. Các màn hình giữ dữ liệu đọc được khi blockchain chưa sẵn sàng và khóa thao tác cần ghi.
+
+## Cấu hình proxy local
+
+Mặc định không cần tạo file môi trường. Nếu đổi cổng backend/RPC, từ `frontend`:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Sửa hai giá trị rồi khởi động lại Vite:
+
+```dotenv
+API_PROXY_TARGET=http://localhost:5180
+RPC_PROXY_TARGET=http://127.0.0.1:8545
+```
+
+Đây là đích proxy cho Vite dev/preview, không phải bí mật và không có tiền tố `VITE_`. `/api` giữ nguyên prefix; `/rpc` bỏ prefix khi chuyển tới JSON-RPC. Không đặt private key, seed phrase, JWT signing key hoặc mật khẩu SQL trong frontend. Bản build tĩnh không mang theo Vite proxy: hosting phải tự cấu hình route cùng origin `/api` và `/rpc`, HTTPS và chính sách truy cập thích hợp. `preview` chỉ dùng xem bản build local.
+
+## Phạm vi kiểm chứng
+
+Build/unit test không cần SQL hoặc node blockchain đang chạy. Test browser hoàn chỉnh cần API, SQL, worker, Hardhat và manifest deployment local; các lệnh test ở trên không khởi tạo thay các dịch vụ đó. Không có trạng thái Ready thì không thể kết luận luồng ký quỹ đã được kiểm chứng. Kiểm tra MetaMask extension thật vẫn thực hiện thủ công theo hướng dẫn vai trò và kịch bản ở trên. Đây là demo ETH local với KYC fixture; chưa có KYC thật, Sepolia, analytics/AI hoặc cấu hình production.

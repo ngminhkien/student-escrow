@@ -1,0 +1,33 @@
+﻿# Research: Existing StudentEscrow Frontend
+
+## Evidence and version constraints
+
+Research date: 2026-10-17. Skills applied: confidence-research and react-best-practices. Scope follows `../brainstorms/BRAINSTORM-frontend.md`; no new backend endpoints or business rules are proposed.
+
+**Confidence: HIGH; source: repository; verified: YES.** `frontend/package.json` pins React/react-dom 19.3.0, ethers 6.17.0, TypeScript 5.9.3, Vite 8.3.3, React plugin 6.1.2 and Playwright 1.63.0. Supported Node range is >=22.13.0 <23 or >=24.0.0 <25. Keep these constraints and installed dependencies; this research does not independently verify npm package publication or installation. No query/router library is currently declared.
+
+**Confidence: HIGH; source: repository; verified: YES.** Existing `api.ts` uses authenticated fetch and a stale-token 401 guard; `wallet.ts` already has EIP-6963 discovery, EIP-1193 listeners, account/chain preflight and receipt tracking. Improve these boundaries rather than replacing escrow safeguards. `vite.config.ts` already proxies API and RPC in dev and preview.
+
+## Verified findings and actionable recommendations
+
+1. **Effects and asynchronous state. Confidence: HIGH; source: official docs; verified: YES.** React requires cleanup for external subscriptions and cancellation or ignoring stale fetch results. Keep POST/signing actions in user event handlers. Use effect cleanup plus request-generation checks for query identity changes (token, order ID, page, deployment); cancellation alone may not prevent a previously resolved request from updating state. Do not derive filters or totals through effects when rendering can calculate them. Source: [React: Synchronizing with Effects](https://react.dev/learn/synchronizing-with-effects).
+
+2. **Transport normalization. Confidence: HIGH; source: official docs; verified: YES.** Fetch resolves for HTTP failures, so check `response.ok` before parsing success data. Handle empty responses, malformed JSON, binary downloads and network failures explicitly. Set JSON content type only for JSON, letting the browser supply multipart boundaries. A generic TypeScript return cast is not runtime validation; validate critical boundary fields before business decisions. Source: [MDN: Using Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch).
+
+3. **Cancellation plus timeouts. Confidence: HIGH; source: official docs and repository; verified: YES.** Existing `signal ?? AbortSignal.timeout(...)` removes the timeout whenever a caller supplies its own signal. Compose both using `AbortSignal.any([callerSignal, AbortSignal.timeout(timeoutMs)])`; preserve a timeout even when component cleanup is enabled. Distinguish intentional cancellation from timeout and service failure in feedback. Browser support must match the actual demo browsers; add a manual composition fallback only if compatibility requires it. Source: [MDN: AbortSignal.any](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/any_static).
+
+4. **Wallet lifecycle. Confidence: HIGH; source: Ethereum standard; verified: YES.** Listen for account, chain and disconnect changes and unsubscribe the same callbacks on teardown/provider replacement. Request access only through an explicit connect action. User rejection (4001), unauthorized access (4100), provider disconnection (4900), and unavailable chain (4901) deserve readable separate feedback. Source: [EIP-1193](https://eips.ethereum.org/EIPS/eip-1193).
+
+5. **Wallet refresh races. Confidence: LOW; source: inference from repository; verified: PARTIAL.** Multiple asynchronous `refresh()` calls can complete out of order after account/network changes. Recommended implementation: generation guard and provider identity checks before committing account/chain state; clear stale state immediately and recheck wallet before signing. Validate this through focused behavior tests; this is a proposed safeguard rather than a proven observed failure.
+
+6. **Transaction semantics. Confidence: HIGH; source: official docs; verified: YES.** ethers v6 BrowserProvider wraps EIP-1193; `TransactionResponse.wait(confirms, timeout)` waits for mining and confirmations. Preserve explicit pending, rejected, failed and confirmed feedback, receipt validation and deployment preflight. Refresh API projections after receipt; a transaction hash is not completed escrow state. Keep exact wei/basis-point calculations as bigint. Source: [ethers v6 Providers](https://docs.ethers.org/v6/api/providers/). The API-projection requirement is repository policy from the brainstorm and backend contract, not an ethers guarantee.
+
+7. **Configuration. Confidence: HIGH; source: official docs; verified: YES.** Vite exposes prefixed client environment values in built code; those values must contain public configuration only. Make dev/preview proxy targets configurable in Vite config, document same-origin API/RPC routing for deployment, and retain local defaults. Never introduce private keys or JWT secrets into client environment files. Source: [Vite: Environment Variables and Modes](https://vite.dev/guide/env-and-mode).
+
+## Bounded architecture handoff
+
+**Confidence: LOW; source: architecture recommendation; verified: PARTIAL.** Organize composition in `app`, use feature modules for authentication/account/orders/administration/transactions, infrastructure modules for HTTP and wallet, shared accessible UI, and domain types/rules. A small dependency-free query hook with explicit loading/error/data, stale-response protection and a refresh trigger fits this repository; a new cache library is optional and requires a concrete need. Do not create a generic cache merely for folder symmetry.
+
+Preserve existing exported APIs or compatibility modules until unit and browser imports are migrated. Keep authorization and settlement authority on backend/contract. Apply pending and empty states to real API responses; never substitute invented orders. Clear protected data immediately on session changes and retain the stale-token expiration guard. A pending mutation should prevent duplicate submission without triggering automatic mutation retries. Inspect backend contracts during scouting before assigning typed endpoint signatures.
+
+Implementation validation should include existing build/unit suites plus targeted cases for caller cancellation with timeout, stale query results, stale-token 401, wallet change before signing, file hash rejection and exact arbitration boundaries. Run browser integration only against available real services and distinguish an unavailable SQL/RPC environment from frontend success. No production-readiness claim follows from this research.

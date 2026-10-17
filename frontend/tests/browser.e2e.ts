@@ -81,13 +81,17 @@ async function register(page: Page, email: string) {
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Mật khẩu", { exact: true }).fill("DemoPassword123!");
   await page.getByRole("button", { name: "Đăng ký", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Đăng xuất", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Tài khoản & ví", exact: true }).click();
   await expect(page.getByRole("button", { name: "Ký và liên kết ví" })).toBeEnabled();
   await page.getByRole("button", { name: "Ký và liên kết ví" }).click();
   await expect(page.getByText("Ví đã liên kết cố định.", { exact: false })).toBeVisible();
 }
 async function openOrder(page: Page, id: string) {
   await page.getByRole("button", { name: "Đơn hàng", exact: true }).click();
-  await page.getByLabel("Mở bằng mã đơn").fill(id);
+  const opener = page.getByText("Mở bằng mã đơn", { exact: true });
+  if (!(await opener.evaluate(element => (element.parentElement as HTMLDetailsElement).open))) await opener.click();
+  await page.getByLabel("Mã bản nháp", { exact: true }).fill(id);
   await page.getByRole("button", { name: "Mở mã đơn", exact: true }).click();
   await expect(page.locator(".order-detail")).toBeVisible();
 }
@@ -112,20 +116,21 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
 
   await buyer.page.getByLabel("Giấy tờ mẫu").selectOption("DEMO-DOCUMENT-FAIL");
   await buyer.page.getByRole("button", { name: "Nộp KYC demo", exact: true }).click();
-  await expect(buyer.page.getByText("REJECTED", { exact: true })).toBeVisible();
+  await expect(buyer.page.getByText("Bị từ chối", { exact: true })).toBeVisible();
   await buyer.page.getByLabel("Giấy tờ mẫu").selectOption("DEMO-DOCUMENT-PASS");
   await buyer.page.getByRole("button", { name: "Nộp KYC demo", exact: true }).click();
-  await expect(buyer.page.getByText("VERIFIED", { exact: true })).toBeVisible();
+  await expect(buyer.page.getByText("Đã xác minh", { exact: true })).toBeVisible();
 
-  await admin.page.getByRole("button", { name: "Admin", exact: true }).click();
+  await admin.page.getByRole("button", { name: "Quản trị blockchain", exact: true }).click();
   for (const actor of [buyer, seller]) {
     await admin.page.getByLabel("Địa chỉ ví cần quản lý").fill(actor.address);
+    await admin.page.getByRole("button", { name: "Tra cứu", exact: true }).click();
     await expect(admin.page.getByRole("button", { name: "Xác minh ví", exact: true })).toBeEnabled();
     await admin.page.getByRole("button", { name: "Xác minh ví", exact: true }).click();
     await expect(admin.page.getByRole("status").filter({ hasText: "Xác minh ví on-chain: hoàn tất" })).toBeVisible();
     await expect(admin.page.locator(".banner").filter({ hasText: "Xác minh: Có" })).toBeVisible();
   }
-  await buyer.page.getByRole("button", { name: "Admin", exact: true }).click();
+  await buyer.page.getByRole("button", { name: "Quản trị blockchain", exact: true }).click();
   await buyer.page.getByLabel("Địa chỉ ví cần quản lý").fill(seller.address);
   await expect(buyer.page.getByRole("button", { name: "Xác minh ví", exact: true })).toBeDisabled();
 
@@ -164,7 +169,7 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await openOrder(seller.page, orderId);
   await seller.page.getByLabel("Loại file", { exact: true }).selectOption("product");
   await seller.page.getByLabel("Chọn file", { exact: true }).setInputFiles({ name: "landing-page.zip", mimeType: "application/zip", buffer: zip });
-  await seller.page.getByRole("button", { name: "Upload file", exact: true }).click();
+  await seller.page.getByRole("button", { name: "Tải file lên", exact: true }).click();
   await expect(seller.page.getByRole("button", { name: "Ký bàn giao", exact: true })).toBeEnabled();
   await seller.page.getByRole("button", { name: "Ký bàn giao", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã bàn giao");
@@ -221,7 +226,7 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await openOrder(seller.page, timeoutId);
   await seller.page.getByLabel("Loại file", { exact: true }).selectOption("product");
   await seller.page.getByLabel("Chọn file", { exact: true }).setInputFiles({ name: "timeout.zip", mimeType: "application/zip", buffer: zip });
-  await seller.page.getByRole("button", { name: "Upload file", exact: true }).click();
+  await seller.page.getByRole("button", { name: "Tải file lên", exact: true }).click();
   await seller.page.getByRole("button", { name: "Ký bàn giao", exact: true }).click();
   await expect(seller.page.getByTestId("order-state")).toHaveText("Đã bàn giao");
   await seller.page.getByRole("button", { name: "Nhận tiền sau hạn phản hồi", exact: true }).click();

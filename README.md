@@ -12,7 +12,7 @@
 
 **04 – Draft/file/hash và Nethereum worker đã đạt gate local:** API tạo draft bất biến, lưu file theo quyền/quota, tính SHA-256; worker đọc contract local vào SQL với checkpoint, dedup, restart và phục hồi reorg. Ngày 06/10/2026: 64/64 test .NET PASS gồm SQL thật; smoke API/blockchain, restart và hồi quy auth/ví/KYC PASS. Hướng dẫn chạy, API, cấu hình và giới hạn ở [backend/ORDERS.md](backend/ORDERS.md).
 
-**05 – React/MetaMask, giao diện trắng–đen:** tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Build, 8 test logic và browser E2E với API/SQL/Hardhat thật PASS; EIP-1193 trong test mô phỏng popup ví, cần thử MetaMask extension thật khi demo. Hướng dẫn [chạy và test chung phần 4–5](frontend/README.md). Ví ký phía client; server không giữ private key. AI và Sepolia chưa triển khai.
+**05 – Frontend React/TypeScript/MetaMask:** không gian làm việc tiếng Việt cho tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Frontend được tổ chức theo tính năng, tách tầng gọi API, domain và hạ tầng ví. Hướng dẫn [chạy, cấu hình và kiểm tra phần 4–5](frontend/README.md). Ví ký phía client; server không giữ private key. Kiểm chứng đầy đủ cần API/SQL/worker và Hardhat đã deploy; test mô phỏng EIP-1193 không thay thế thử popup MetaMask thật. AI và Sepolia chưa triển khai.
 
 Ghi chú tiến độ và hướng dẫn Swagger chi tiết nằm trong `docs/` trên máy phát triển, không được push. Các bước chạy và kiểm tra API cần thiết nằm ngay trong README này.
 
