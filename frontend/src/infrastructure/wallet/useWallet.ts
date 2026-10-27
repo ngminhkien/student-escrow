@@ -42,6 +42,7 @@ export function useWallet() {
       const chain = await provider.request({ method: "eth_chainId" }) as string;
       if (requestId !== generation.current || provider !== injected()) return;
       setAccount(accounts[0] ?? ""); setChainId(String(BigInt(chain)));
+      return { account: accounts[0] ?? "", chainId: String(BigInt(chain)) };
     } catch { if (requestId === generation.current && provider === injected()) { setAccount(""); setChainId(""); } }
   }, []);
   useEffect(() => {
@@ -56,7 +57,7 @@ export function useWallet() {
   useEffect(() => {
     void refresh();
     const provider = injected();
-    const changed = () => { setAccount(""); setChainId(""); void refresh(); };
+    const changed = () => { void refresh(); };
     provider?.on?.("accountsChanged", changed); provider?.on?.("chainChanged", changed); provider?.on?.("disconnect", changed);
     window.addEventListener("focus", changed);
     return () => {

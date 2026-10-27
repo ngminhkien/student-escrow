@@ -1,4 +1,4 @@
-import { BrowserProvider, Contract, Interface, toQuantity } from "ethers";
+import { BrowserProvider, Contract, Interface, toQuantity, formatEther } from "ethers";
 import type { TransactionReceipt, TransactionResponse } from "ethers";
 import abi from "../../../../blockchain/deployment/Escrow.abi.json";
 import { health } from "../../services/health";
@@ -56,10 +56,23 @@ export async function sendTransaction(expected: string, deploymentId: string, me
     ? [...args.slice(0, -1), { ...last, blockTag: "pending" }] : [...args, { blockTag: "pending" }];
   await operation.staticCall(...preflight);
   check();
+  const [estimatedGas, fees, balance] = await Promise.all([
+    operation.estimateGas(...args), provider.getFeeData(), provider.getBalance(expected, "pending")
+  ]);
+  check();
+  const gasLimit = (estimatedGas * 120n + 99n) / 100n;
+  const gasPrice = fees.maxFeePerGas ?? fees.gasPrice;
+  if (gasPrice === null) throw new Error("Chưa đọc được phí gas. Thử lại khi kết nối blockchain ổn định.");
+  const value = last && typeof last === "object" && "value" in last ? BigInt(String(last.value)) : 0n;
+  const estimatedFee = gasLimit * gasPrice;
+  if (balance < value + estimatedFee)
+    throw new Error(`Ví không đủ ETH. Số dư: ${formatEther(balance)} ETH; số tiền giao dịch: ${formatEther(value)} ETH; gas dự trù: ${formatEther(estimatedFee)} ETH. Nạp thêm ETH local rồi thử lại.`);
   // Recheck after potentially slow RPC/preflight, before opening the signing prompt.
   await assertWallet(expected, selectedProvider);
   check();
-  const response = await operation(...args) as TransactionResponse;
+  const transactionArgs = last && typeof last === "object" && "value" in last
+    ? [...args.slice(0, -1), { ...last, gasLimit }] : [...args, { gasLimit }];
+  const response = await operation(...transactionArgs) as TransactionResponse;
   const transaction = { hash: response.hash, label: method, deploymentId, address: expected, status: "Đang chờ xác nhận" };
   record(transaction);
   let receipt: TransactionReceipt | null;

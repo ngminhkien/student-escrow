@@ -12,11 +12,16 @@ type TestWallet = { account: string; chain: string; reject: boolean; change: (ac
 declare global { interface Window { __walletRpc: (input: { method: string; params?: unknown[] }) => Promise<{ result?: unknown; error?: { message: string; code?: string | number } }>; __testWallet: TestWallet } }
 
 // The injected EIP-1193 wallet simulates extension prompts only. Its Node-side signer
-// signs real transactions on Hardhat, and every API call uses real SQL/backend.
-async function actorPage(browser: Browser, signer: Signer) {
+// signs real transactions on Hardhat. Buyer/Seller/Arbiter use real API/SQL.
+// The admin workspace identity is a browser fixture; contract roles and transactions are real.
+async function actorPage(browser: Browser, signer: Signer, admin = false) {
   const context = await browser.newContext();
   const page = await context.newPage();
   const actorAddress = await signer.getAddress();
+  if (admin) {
+    await page.addInitScript(() => sessionStorage.setItem("escrow.session", JSON.stringify({ accessToken: "admin-workspace-fixture", expiresAt: "2099-01-01T00:00:00Z", user: { id: "admin-fixture", fullName: "Admin fixture", email: "viego.hvnh@gmail.com" } })));
+    await page.route("**/api/wallets/me", route => route.fulfill({ json: { linked: true, address: actorAddress, chainId: 31337 } }));
+  }
   await page.exposeBinding("__walletRpc", async (_source, input: { method: string; params?: unknown[] }) => {
     try {
       const params = input.params ?? [];
@@ -57,6 +62,7 @@ async function actorPage(browser: Browser, signer: Signer) {
         if (method === "eth_requestAccounts") { connected = true; return [window.__testWallet.account]; }
         if (method === "eth_accounts") return connected ? [window.__testWallet.account] : [];
         if (method === "eth_chainId") return window.__testWallet.chain;
+        if (method === "wallet_requestPermissions") return [{ parentCapability: "eth_accounts" }];
         if (method === "wallet_switchEthereumChain") {
           window.__testWallet.chain = "0x7a69";
           for (const listener of listeners.chainChanged ?? []) listener("0x7a69");
@@ -69,9 +75,7 @@ async function actorPage(browser: Browser, signer: Signer) {
     };
   }, { account: actorAddress });
   await page.goto("/");
-  await expect(page.getByText("Blockchain: Ready", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Kết nối MetaMask", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Kết nối lại ví" })).toBeEnabled();
+  await expect(page.getByRole("heading", { name: admin ? "Quản trị" : "Đăng nhập", exact: true })).toBeVisible();
   return { page, context, address: actorAddress };
 }
 
@@ -102,7 +106,7 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   const adminSigner = await rpc.getSigner(0);
   const signers = [Wallet.createRandom().connect(rpc), Wallet.createRandom().connect(rpc), Wallet.createRandom().connect(rpc)];
   for (const signer of signers) await (await adminSigner.sendTransaction({ to: signer.address, value: parseEther("1") })).wait();
-  const admin = await actorPage(browser, adminSigner);
+  const admin = await actorPage(browser, adminSigner, true);
   const buyer = await actorPage(browser, signers[0]);
   const seller = await actorPage(browser, signers[1]);
   const arbiter = await actorPage(browser, signers[2]);
@@ -121,7 +125,7 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await buyer.page.getByRole("button", { name: "Nộp KYC demo", exact: true }).click();
   await expect(buyer.page.getByText("Đã xác minh", { exact: true })).toBeVisible();
 
-  await admin.page.getByRole("button", { name: "Quản trị blockchain", exact: true }).click();
+  await admin.page.getByRole("button", { name: "Quản trị", exact: true }).click();
   for (const actor of [buyer, seller]) {
     await admin.page.getByLabel("Địa chỉ ví cần quản lý").fill(actor.address);
     await admin.page.getByRole("button", { name: "Tra cứu", exact: true }).click();
@@ -130,18 +134,16 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
     await expect(admin.page.getByRole("status").filter({ hasText: "Xác minh ví on-chain: hoàn tất" })).toBeVisible();
     await expect(admin.page.locator(".banner").filter({ hasText: "Xác minh: Có" })).toBeVisible();
   }
-  await buyer.page.getByRole("button", { name: "Quản trị blockchain", exact: true }).click();
-  await buyer.page.getByLabel("Địa chỉ ví cần quản lý").fill(seller.address);
-  await expect(buyer.page.getByRole("button", { name: "Xác minh ví", exact: true })).toBeDisabled();
+  await expect(buyer.page.getByRole("button", { name: "Quản trị", exact: true })).toHaveCount(0);
+  await expect(admin.page.getByRole("button", { name: "Đơn hàng", exact: true })).toHaveCount(0);
 
   await buyer.page.getByRole("button", { name: "Đơn hàng", exact: true }).click();
-  // Explicit account/network change events must invalidate signing eligibility.
+  // A network change is repaired automatically through the wallet confirmation flow.
   await buyer.page.evaluate(address => window.__testWallet.change(address, "0x1"), buyer.address);
-  await expect(buyer.page.getByRole("alert").filter({ hasText: "Sai mạng" })).toBeVisible();
-  await expect(buyer.page.getByRole("button", { name: "Tạo bản nháp", exact: true })).toBeDisabled();
-  await buyer.page.getByRole("button", { name: "Chuyển sang mạng local" }).click();
+  await expect.poll(() => buyer.page.evaluate(() => window.__testWallet.chain)).toBe("0x7a69");
+  await expect(buyer.page.getByText("Ví đã sẵn sàng", { exact: true })).toBeVisible();
   await buyer.page.evaluate(address => window.__testWallet.change(address, "0x7a69"), seller.address);
-  await expect(buyer.page.getByRole("alert").filter({ hasText: "khác ví liên kết" })).toBeVisible();
+  await expect(buyer.page.getByRole("alert").filter({ hasText: "Chọn ví liên kết" })).toBeVisible();
   await expect(buyer.page.getByRole("button", { name: "Tạo bản nháp", exact: true })).toBeDisabled();
   await buyer.page.evaluate(address => window.__testWallet.change(address, "0x7a69"), buyer.address);
   console.log("PASS UI KYC, Admin verification, wrong wallet and wrong network");

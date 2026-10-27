@@ -9,8 +9,9 @@ import type { Kyc, LinkedWallet, NetworkStatus, RunAction, Session } from "../..
 export interface AccountPageProps {
   session: Session; account: string; canSign: boolean; network: NetworkStatus; busy: boolean; run: RunAction;
   onLinked: (wallet: LinkedWallet) => void; revision: number;
+  chooseWallet?: () => Promise<void>;
 }
-export default function AccountPage({ session, account, canSign, network, busy, run, onLinked, revision }: AccountPageProps) {
+export default function AccountPage({ session, account, canSign, network, busy, run, onLinked, revision, chooseWallet }: AccountPageProps) {
   const [wallet, setWallet] = useState<LinkedWallet | null>(null);
   const [kyc, setKyc] = useState<Kyc | null>(null);
   const [verified, setVerified] = useState<boolean | null>(null);
@@ -102,9 +103,10 @@ export default function AccountPage({ session, account, canSign, network, busy, 
       {error && <p role="alert">{error}</p>}
       <dl><dt>Ví liên kết</dt><dd className="mono">{wallet?.address ?? "Chưa liên kết"}</dd><dt>Mạng của ví liên kết</dt><dd>{wallet?.chainId ?? "—"}</dd></dl>
       <dl><dt>Ví đang chọn trong MetaMask</dt><dd className="mono">{account || "Chưa kết nối"}</dd></dl>
-      {!wallet?.linked && <><p>Kiểm tra địa chỉ ví ở trên trước khi ký. Nếu muốn dùng ví khác, bấm “Đổi ví MetaMask”. Ký thông điệp một lần để chứng minh bạn sở hữu ví đang chọn; thao tác này không chuyển ETH và không tốn gas.</p>
+      {!wallet?.linked && <><p>Chọn ví bạn muốn dùng và ký xác nhận một lần. Chữ ký liên kết không chuyển ETH và không tốn gas.</p>
+        {chooseWallet && <button className="secondary" disabled={busy} onClick={() => void run("Chọn ví MetaMask", chooseWallet)}>Đổi ví MetaMask</button>}{" "}
         <button disabled={busy || !canSign || !wallet} onClick={() => void run("Liên kết ví", link)}>Ký và liên kết ví</button></>}
-      {wallet?.linked && <p>Ví đã liên kết cố định. Để dùng ví khác cho tài khoản mới: đăng xuất, đăng ký bằng email khác, bấm “Đổi ví MetaMask” chọn ví chưa liên kết, rồi ký liên kết ví. Mỗi ví chỉ liên kết với một tài khoản.</p>}
+      {wallet?.linked && <p>Ví đã liên kết cố định. Khi đăng nhập, ứng dụng tự kiểm tra và yêu cầu chọn đúng ví này. Bạn có thể bấm “Đồng bộ ví” để kiểm tra lại bất cứ lúc nào.</p>}
       <hr /><h3>Xác minh on-chain</h3><p>{verified === null ? "Chưa đọc được trạng thái contract." : verified ? "Đã được Admin xác minh trên contract hiện tại." : "Chưa được Admin xác minh trên contract hiện tại."}</p>
       <p className="muted">Buyer và Seller cần xác minh on-chain để tạo/nạp đơn. KYC mock bên cạnh không tự cấp quyền này. Sau khi deploy lại, Admin cần xác minh lại.</p>
     </section>

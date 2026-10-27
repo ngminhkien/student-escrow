@@ -14,7 +14,7 @@ export default function AuthForm({ busy, run, onSession }: { busy: boolean; run:
     });
   }
   return <div className="auth-layout"><aside className="auth-aside"><p className="page-eyebrow">STUDENT ESCROW</p><h2>Hợp tác rõ ràng.<br />Thanh toán an tâm.</h2><p>Một quy trình minh bạch từ thỏa thuận đến nghiệm thu dịch vụ.</p><ol><li>Liên kết tài khoản với ví MetaMask của bạn.</li><li>Thống nhất điều khoản và ký quỹ trên blockchain.</li><li>Giao sản phẩm, kiểm tra và xác nhận nghiệm thu.</li></ol><p className="muted">Môi trường thử nghiệm local. Chỉ dùng ví và ETH thử nghiệm.</p></aside><section className="panel narrow auth-card"><h2>{register ? "Tạo tài khoản" : "Đăng nhập"}</h2>
-    <p>Tài khoản ứng dụng và ví MetaMask là hai bước riêng. Mỗi tài khoản liên kết một ví.</p>
+    <p>Đăng nhập để tiếp tục. Ứng dụng sẽ tự kiểm tra và yêu cầu kết nối đúng ví MetaMask của bạn.</p>
     <form onSubmit={submit}>
       {register && <label>Họ tên<input name="fullName" minLength={2} maxLength={100} required autoComplete="name" /></label>}
       <label>Email<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>

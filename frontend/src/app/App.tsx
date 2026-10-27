@@ -13,14 +13,19 @@ import AppShell from "./AppShell";
 import type { WorkspaceTab } from "./AppShell";
 import { useSession } from "./useSession";
 import { useReadiness } from "./useReadiness";
+import { isAdminAccount } from "../domain/access";
+import { useWalletSession } from "./useWalletSession";
+import { useWalletFunds } from "./useWalletFunds";
 function readTransactions(): TxRecord[] {
   try { const value: unknown = JSON.parse(sessionStorage.getItem("escrow.transactions") ?? "[]"); return Array.isArray(value) ? value.filter((t): t is TxRecord => !!t && typeof t.hash === "string" && typeof t.address === "string" && typeof t.deploymentId === "string" && typeof t.status === "string" && typeof t.label === "string").slice(0, 30) : []; } catch { return []; }
 }
 export default function App() {
   const { session, changeSession, expired } = useSession();
   const [linkedState, setLinkedState] = useState<{ token: string; value: LinkedWallet } | null>(null);
-  const linked = linkedState?.token === session?.accessToken ? linkedState?.value : null;
-  const [tab, setTab] = useState<WorkspaceTab>(session ? "orders" : "account");
+  const linked = linkedState?.token === session?.accessToken ? linkedState?.value ?? null : null;
+  const admin = isAdminAccount(session);
+  const [selectedTab, setTab] = useState<WorkspaceTab>(session ? admin ? "admin" : "orders" : "account");
+  const tab = !session ? "account" : selectedTab === "account" ? "account" : admin ? "admin" : "orders";
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -31,6 +36,9 @@ export default function App() {
   const currentIdentity = useRef(identity); currentIdentity.current = identity;
   const wallet = useWallet();
   const { network, chainTime } = useReadiness(revision);
+  const walletSession = useWalletSession(identity, linked, wallet, !!busy);
+  const funds = useWalletFunds(linked?.address ?? wallet.account, !!session && network.status === "Ready");
+  const working = !!busy || walletSession.checking;
   useEffect(() => { setLinkedState(null); setNotice(""); setError(""); }, [identity]);
   useEffect(() => {
     if (!session) return;
@@ -66,16 +74,17 @@ export default function App() {
       record({ ...transaction, status: receipt ? receipt.status === 1 ? "Đã xác nhận trên chain" : "Thất bại" : "Chưa có receipt (pending hoặc chain đã đổi)" });
     }
   }
-  const canSign = !!wallet.account && wallet.chainId === "31337";
-  const matched = !!linked?.linked && linked.chainId === 31337 && sameAddress(linked.address, wallet.account);
-  return <AppShell session={session} logout={() => changeSession(null)} tab={tab} setTab={setTab} wallet={wallet} network={network} busy={!!busy} run={run}>
-    {wallet.account && wallet.chainId !== "31337" && <p className="banner" role="alert">Sai mạng ({wallet.chainId || "chưa xác định"}). Cần chain 31337 trước khi ký.</p>}
-    {linked?.linked && wallet.account && !matched && <p className="banner" role="alert">Ví đang chọn khác ví liên kết tài khoản: <span className="mono">{linked.address}</span>. Bấm “Đổi ví MetaMask” và chọn địa chỉ này. Đăng nhập ứng dụng không tự chuyển ví trong MetaMask.</p>}
-    {network.status !== "Ready" && <p className="banner">Chưa thể gửi giao dịch. Kiểm tra node local, deploy contract và API có bật worker.</p>}
+  const canSign = !!wallet.account && wallet.chainId === "31337" && !walletSession.checking;
+  const matched = !!linked?.linked && linked.chainId === 31337 && wallet.chainId === "31337" && sameAddress(linked.address, wallet.account);
+  return <AppShell session={session} logout={() => changeSession(null)} tab={tab} setTab={setTab} wallet={wallet} network={network} busy={working} checking={walletSession.checking} matched={matched} expectedAddress={linked?.address ?? null} synchronize={walletSession.synchronize} funds={funds}>
+    {session && !walletSession.checking && linked?.linked && !matched && <p className="banner" role="alert">Chọn ví liên kết <span className="mono">{linked.address}</span> trên mạng StudentEscrow Local trong MetaMask. Bấm “Đồng bộ ví” để thử lại.</p>}
+    {session && walletSession.error && <p className="banner" role="alert">{walletSession.error}</p>}
+    {session && linked && !linked.linked && <div className="banner onboarding-banner"><div><strong>Hoàn tất thiết lập tài khoản</strong><p>Kết nối và ký liên kết ví một lần để bắt đầu sử dụng.</p></div><button className="secondary" onClick={() => setTab("account")}>Thiết lập ví</button></div>}
+    {session && network.status !== "Ready" && <p className="banner">Kết nối blockchain chưa sẵn sàng. Bạn vẫn có thể xem tài khoản; các giao dịch sẽ mở khi kết nối được khôi phục.</p>}
     <div className="feedback" aria-live="polite">{busy && <p role="status">{busy}… Nếu có yêu cầu ký, hãy mở MetaMask.</p>}{(error || expired) && <p className="banner" role="alert">{error || "Phiên đăng nhập hết hạn. Đăng nhập lại để tiếp tục."}</p>}{notice && <p role="status">{notice}</p>}</div>
-    {tab === "account" && (session ? <AccountPanel key={identity} session={session} account={wallet.account} canSign={canSign} network={network} busy={!!busy} run={run} onLinked={onLinked} revision={revision} /> : <AuthForm busy={!!busy} run={run} onSession={value => { changeSession(value); setTab("orders"); }} />)}
-    {tab === "orders" && (session ? <OrdersPanel key={identity} session={session} account={wallet.account} canSign={canSign && matched} network={network} chainTime={chainTime} busy={!!busy} run={run} record={record} revision={revision} /> : <section className="panel welcome-panel"><p className="page-eyebrow">GIAO DỊCH CÓ ĐIỀU KHOẢN RÕ RÀNG</p><h2>An tâm hợp tác.<br />Minh bạch từng bước.</h2><p>Tạo thỏa thuận, ký quỹ và nghiệm thu dịch vụ trên blockchain local. Bắt đầu bằng tài khoản ứng dụng của bạn.</p><button onClick={() => setTab("account")}>Đến đăng nhập</button><p className="muted">Tài khoản và ví MetaMask là hai bước riêng biệt.</p></section>)}
-    {tab === "admin" && <AdminPanel account={wallet.account} canSign={canSign} network={network} busy={!!busy} run={run} record={record} revision={revision} />}
-    <TransactionJournal transactions={visibleTransactions} busy={!!busy} run={run} check={checkTransactions} />
+    {tab === "account" && (session ? <AccountPanel key={identity} session={session} account={wallet.account} canSign={canSign} network={network} busy={working} run={run} onLinked={onLinked} revision={revision} chooseWallet={wallet.changeAccount} /> : <AuthForm busy={!!busy} run={run} onSession={value => { changeSession(value); setTab(isAdminAccount(value) ? "admin" : "orders"); }} />)}
+    {session && !admin && tab === "orders" && <OrdersPanel key={identity} session={session} account={wallet.account} canSign={canSign && matched} network={network} chainTime={chainTime} busy={working} run={run} record={record} revision={revision} />}
+    {session && admin && tab === "admin" && <AdminPanel key={identity} account={matched ? wallet.account : ""} canSign={canSign && matched} network={network} busy={working} run={run} record={record} revision={revision} />}
+    {session && <TransactionJournal transactions={visibleTransactions} busy={working} run={run} check={checkTransactions} />}
   </AppShell>;
 }

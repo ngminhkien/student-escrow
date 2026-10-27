@@ -39,11 +39,8 @@ for (const width of [375, 1440]) test(`mocked workspace navigation and local pag
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `test-results/screenshots/account-${width}.png`, fullPage: false });
-  await page.getByRole("button", { name: "Quản trị blockchain", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Xác minh ví", exact: true })).toBeDisabled();
-  await expect(page.getByLabel("Địa chỉ ví cần quản lý")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Quản trị", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Đăng xuất", exact: true }).click();
-  await page.getByRole("button", { name: "Tài khoản & ví", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Đăng nhập", exact: true })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("escrow.session"))).toBeNull();
 });
@@ -59,7 +56,7 @@ test("mocked pending protected read is discarded after logout", async ({ page })
   await page.goto("/");
   await page.getByRole("button", { name: "Đăng xuất", exact: true }).click();
   release();
-  await expect(page.getByRole("heading", { name: /An tâm hợp tác/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Đăng nhập", exact: true })).toBeVisible();
   await expect(page.getByText("Website 999", { exact: true })).toHaveCount(0);
 });
 

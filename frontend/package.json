@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "playwright test --config playwright.unit.config.ts",
+    "test:ui": "playwright test --config playwright.ui.config.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": { "ethers": "6.17.0", "react": "19.3.0", "react-dom": "19.3.0" },
