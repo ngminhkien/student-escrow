@@ -21,8 +21,8 @@ export type OrderView = {
   lastIndexedBlock: number; checkedAt: string; files: OrderFile[]; deliveryFileMatchesChain: boolean;
 };
 export type ChainEvent = { name: string; blockNumber: number; transactionHash: string; logIndex: number; payload: string };
-export type TxRecord = { hash: string; label: string; deploymentId: string; address: string; status: string };
-export type RunAction = (label: string, action: () => Promise<void>) => Promise<void>;
+export type TxRecord = { hash: string; label: string; deploymentId: string; address: string; status: string; phase?: "pending" | "confirmed" | "failed" | "cancelled" | "unknown" };
+export type RunAction = (label: string, action: () => Promise<void>, options?: { inlineError?: boolean }) => Promise<void>;
 export interface LoginRequest { email: string; password: string }
 export interface RegisterRequest extends LoginRequest { fullName: string }
 export interface WalletChallenge { challengeId: string; address: string; chainId: number; message: string; expiresAt: string }

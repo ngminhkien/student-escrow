@@ -16,6 +16,7 @@ import { useReadiness } from "./useReadiness";
 import { isAdminAccount } from "../domain/access";
 import { useWalletSession } from "./useWalletSession";
 import { useWalletFunds } from "./useWalletFunds";
+import WalletNotice from "./WalletNotice";
 function readTransactions(): TxRecord[] {
   try { const value: unknown = JSON.parse(sessionStorage.getItem("escrow.transactions") ?? "[]"); return Array.isArray(value) ? value.filter((t): t is TxRecord => !!t && typeof t.hash === "string" && typeof t.address === "string" && typeof t.deploymentId === "string" && typeof t.status === "string" && typeof t.label === "string").slice(0, 30) : []; } catch { return []; }
 }
@@ -54,12 +55,12 @@ export default function App() {
     return () => { active = false; controller.abort(); window.removeEventListener("focus", refresh); };
   }, [identity, revision]);
   const onLinked = useCallback((value: LinkedWallet) => { if (currentIdentity.current === identity && identity) setLinkedState({ token: identity, value }); }, [identity]);
-  const run: RunAction = async (label, action) => {
+  const run: RunAction = async (label, action, options) => {
     if (running.current || currentIdentity.current !== identity) return;
     if (session && Date.now() >= new Date(session.expiresAt).getTime()) { changeSession(null); return; }
     running.current = true; setBusy(label); setError(""); setNotice("");
     try { await action(); if (currentIdentity.current === identity) setNotice(label + ": hoàn tất."); }
-    catch (failure) { if (currentIdentity.current === identity) setError(errorMessage(failure)); }
+    catch (failure) { if (currentIdentity.current === identity && !options?.inlineError) setError(errorMessage(failure)); }
     finally { running.current = false; setBusy(""); setRevision(value => value + 1); }
   };
   const record = (transaction: TxRecord) => setTransactions(previous => {
@@ -76,15 +77,30 @@ export default function App() {
   }
   const canSign = !!wallet.account && wallet.chainId === "31337" && !walletSession.checking;
   const matched = !!linked?.linked && linked.chainId === 31337 && wallet.chainId === "31337" && sameAddress(linked.address, wallet.account);
-  return <AppShell session={session} logout={() => changeSession(null)} tab={tab} setTab={setTab} wallet={wallet} network={network} busy={working} checking={walletSession.checking} matched={matched} expectedAddress={linked?.address ?? null} synchronize={walletSession.synchronize} funds={funds}>
-    {session && !walletSession.checking && linked?.linked && !matched && <p className="banner" role="alert">Chọn ví liên kết <span className="mono">{linked.address}</span> trên mạng StudentEscrow Local trong MetaMask. Bấm “Đồng bộ ví” để thử lại.</p>}
+  const walletReady = matched && canSign;
+  function navigateTab(next: WorkspaceTab) {
+    if (next === "orders") {
+      const url = new URL(location.href);
+      if (url.searchParams.has("order") || url.searchParams.has("create")) {
+        url.searchParams.delete("order"); url.searchParams.delete("create");
+        history.pushState(null, "", url.pathname + url.search + url.hash);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    }
+    setTab(next);
+  }
+  return <AppShell session={session} logout={() => changeSession(null)} tab={tab} setTab={navigateTab} wallet={wallet} network={network} busy={working} checking={walletSession.checking} matched={matched} expectedAddress={linked?.address ?? null} synchronize={walletSession.synchronize} funds={funds}>
+    {session && <WalletNotice linked={linked} account={wallet.account} chainId={wallet.chainId} available={wallet.available} checking={walletSession.checking} ready={walletReady} />}
     {session && walletSession.error && <p className="banner" role="alert">{walletSession.error}</p>}
-    {session && linked && !linked.linked && <div className="banner onboarding-banner"><div><strong>Hoàn tất thiết lập tài khoản</strong><p>Kết nối và ký liên kết ví một lần để bắt đầu sử dụng.</p></div><button className="secondary" onClick={() => setTab("account")}>Thiết lập ví</button></div>}
+    {session && linked && !linked.linked && <div id="wallet-access-warning" className="banner onboarding-banner" role="alert"><div><strong>Hoàn tất thiết lập tài khoản</strong><p>Tài khoản chưa liên kết ví. Các nút chức năng đang bị khóa. Kết nối và ký liên kết ví một lần để bắt đầu sử dụng.</p></div><button className="secondary" onClick={() => setTab("account")}>Thiết lập ví</button></div>}
     {session && network.status !== "Ready" && <p className="banner">Kết nối blockchain chưa sẵn sàng. Bạn vẫn có thể xem tài khoản; các giao dịch sẽ mở khi kết nối được khôi phục.</p>}
     <div className="feedback" aria-live="polite">{busy && <p role="status">{busy}… Nếu có yêu cầu ký, hãy mở MetaMask.</p>}{(error || expired) && <p className="banner" role="alert">{error || "Phiên đăng nhập hết hạn. Đăng nhập lại để tiếp tục."}</p>}{notice && <p role="status">{notice}</p>}</div>
-    {tab === "account" && (session ? <AccountPanel key={identity} session={session} account={wallet.account} canSign={canSign} network={network} busy={working} run={run} onLinked={onLinked} revision={revision} chooseWallet={wallet.changeAccount} /> : <AuthForm busy={!!busy} run={run} onSession={value => { changeSession(value); setTab(isAdminAccount(value) ? "admin" : "orders"); }} />)}
+    {tab === "account" && (session ? <AccountPanel key={identity} session={session} account={wallet.account} canSign={canSign && !!linked && (!linked.linked || matched)} network={network} busy={working} run={run} onLinked={onLinked} revision={revision} chooseWallet={wallet.changeAccount} /> : <AuthForm busy={!!busy} run={run} onSession={value => { changeSession(value); setTab(isAdminAccount(value) ? "admin" : "orders"); }} />)}
+    {session && <fieldset className="wallet-action-gate" disabled={!walletReady} aria-describedby={!walletReady ? "wallet-access-warning" : undefined}>
+    <legend className="sr-only">Chức năng yêu cầu kết nối đúng ví tài khoản</legend>
     {session && !admin && tab === "orders" && <OrdersPanel key={identity} session={session} account={wallet.account} canSign={canSign && matched} network={network} chainTime={chainTime} busy={working} run={run} record={record} revision={revision} />}
     {session && admin && tab === "admin" && <AdminPanel key={identity} account={matched ? wallet.account : ""} canSign={canSign && matched} network={network} busy={working} run={run} record={record} revision={revision} />}
-    {session && <TransactionJournal transactions={visibleTransactions} busy={working} run={run} check={checkTransactions} />}
+    {session && tab === "account" && <details><summary>Lịch sử giao dịch ví</summary><TransactionJournal transactions={visibleTransactions} busy={working} run={run} check={checkTransactions} /></details>}
+    </fieldset>}
   </AppShell>;
 }

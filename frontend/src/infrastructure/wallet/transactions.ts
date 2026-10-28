@@ -1,11 +1,12 @@
-import { BrowserProvider, Contract, Interface, toQuantity, formatEther } from "ethers";
+import { BrowserProvider, Contract, Interface, formatEther } from "ethers";
 import type { TransactionReceipt, TransactionResponse } from "ethers";
 import abi from "../../../../blockchain/deployment/Escrow.abi.json";
 import { health } from "../../services/health";
 import { sameAddress } from "../../domain/rules";
 import type { TxRecord } from "../../domain/types";
-import { injected } from "./useWallet";
+import { injected, rpc } from "./useWallet";
 import type { WalletProvider } from "./useWallet";
+import { inspectWalletNetwork, requireMatchingWalletNetwork } from "./networkIdentity";
 export async function assertWallet(expected: string, provider: WalletProvider | undefined = injected()) {
   if (!provider) throw new Error("MetaMask chưa sẵn sàng.");
   if (provider !== injected()) throw new Error("Ví đang hoạt động đã thay đổi. Hãy thử lại.");
@@ -41,9 +42,10 @@ export async function sendTransaction(expected: string, deploymentId: string, me
       return selectedProvider.request(input);
     }
   });
-  const block = await provider.send("eth_getBlockByNumber", [toQuantity(network.deploymentBlock), false]);
+  const identity = await inspectWalletNetwork(selectedProvider, network, check,
+    hash => rpc.send("eth_getCode", [network.contractAddress, { blockHash: hash, requireCanonical: true }]) as Promise<string>);
   check();
-  if (block?.hash !== network.deploymentBlockHash) throw new Error("RPC trong MetaMask khác blockchain của API. Kiểm tra URL mạng local.");
+  requireMatchingWalletNetwork(identity);
   const code = await provider.getCode(network.contractAddress!);
   check();
   if (code === "0x") throw new Error("Contract không còn tồn tại. Hãy deploy và tải lại.");
@@ -73,7 +75,7 @@ export async function sendTransaction(expected: string, deploymentId: string, me
   const transactionArgs = last && typeof last === "object" && "value" in last
     ? [...args.slice(0, -1), { ...last, gasLimit }] : [...args, { gasLimit }];
   const response = await operation(...transactionArgs) as TransactionResponse;
-  const transaction = { hash: response.hash, label: method, deploymentId, address: expected, status: "Đang chờ xác nhận" };
+  const transaction: TxRecord = { hash: response.hash, label: method, deploymentId, address: expected, status: "Đang chờ xác nhận", phase: "pending" };
   record(transaction);
   let receipt: TransactionReceipt | null;
   try { receipt = await response.wait(1, 90000); }
@@ -81,18 +83,19 @@ export async function sendTransaction(expected: string, deploymentId: string, me
     const replacement = error as { code?: string; cancelled?: boolean; receipt?: TransactionReceipt; replacement?: TransactionResponse };
     if (replacement.code === "TRANSACTION_REPLACED") {
       if (replacement.cancelled) {
-        record({ ...transaction, status: "Đã hủy/thay bằng giao dịch khác" });
+        record({ ...transaction, status: "Đã hủy/thay bằng giao dịch khác", phase: "cancelled" });
         throw new Error("Giao dịch đã bị hủy hoặc thay thế trong ví. Trạng thái đơn sẽ lấy lại từ blockchain.");
       }
       receipt = replacement.receipt ?? null;
       transaction.hash = replacement.replacement?.hash ?? transaction.hash;
     } else {
-      record({ ...transaction, status: replacement.receipt?.status === 0 ? "Thất bại" : "Chưa xác định — kiểm tra lại" });
+      record({ ...transaction, status: replacement.receipt?.status === 0 ? "Thất bại" : "Chưa xác định — kiểm tra lại", phase: replacement.receipt?.status === 0 ? "failed" : "unknown" });
       throw error;
     }
   }
-  if (!receipt || receipt.status !== 1) { record({ ...transaction, status: "Thất bại" }); throw new Error("Giao dịch không thành công."); }
-  record({ ...transaction, status: "Đã xác nhận trên chain" });
+  if (!receipt) { record({ ...transaction, status: "Chưa xác định — kiểm tra lại", phase: "unknown" }); throw new Error("Chưa xác định được kết quả giao dịch. Kiểm tra lại trước khi gửi tiếp."); }
+  if (receipt.status !== 1) { record({ ...transaction, status: "Thất bại", phase: "failed" }); throw new Error("Giao dịch không thành công."); }
+  record({ ...transaction, status: "Đã xác nhận trên chain", phase: "confirmed" });
 }
 
 const messages: Record<string, string> = {

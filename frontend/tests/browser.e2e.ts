@@ -149,6 +149,7 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   console.log("PASS UI KYC, Admin verification, wrong wallet and wrong network");
 
   async function createDraft(description: string, reviewWindow = "300") {
+    await buyer.page.getByRole("navigation", { name: "Chức năng" }).getByRole("button", { name: "Đơn hàng", exact: true }).click();
     await buyer.page.getByRole("button", { name: "Tạo bản nháp", exact: true }).click();
     await buyer.page.getByLabel("Ví Seller", { exact: true }).fill(seller.address);
     await buyer.page.getByLabel("Ví Arbiter", { exact: true }).fill(arbiter.address);
@@ -169,20 +170,21 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
   await openOrder(seller.page, orderId);
-  await seller.page.getByLabel("Loại file", { exact: true }).selectOption("product");
-  await seller.page.getByLabel("Chọn file", { exact: true }).setInputFiles({ name: "landing-page.zip", mimeType: "application/zip", buffer: zip });
-  await seller.page.getByRole("button", { name: "Tải file lên", exact: true }).click();
-  await expect(seller.page.getByRole("button", { name: "Ký bàn giao", exact: true })).toBeEnabled();
-  await seller.page.getByRole("button", { name: "Ký bàn giao", exact: true }).click();
+  await seller.page.getByLabel("Chọn ZIP mã nguồn", { exact: true }).setInputFiles({ name: "landing-page.zip", mimeType: "application/zip", buffer: zip });
+  await seller.page.getByRole("button", { name: "Tải ZIP mã nguồn", exact: true }).click();
+  await seller.page.getByLabel("Tôi xác nhận ZIP đã tải lên", { exact: false }).check();
+  await expect(seller.page.getByRole("button", { name: "Xác nhận đã gửi code", exact: true })).toBeEnabled();
+  await seller.page.getByRole("button", { name: "Xác nhận đã gửi code", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã bàn giao");
-  await expect(buyer.page.getByTestId("delivery-match")).toContainText("Khớp ZIP");
+  await expect(buyer.page.getByTestId("delivery-match")).toContainText("File khớp");
   const downloaded = buyer.page.waitForEvent("download");
   await buyer.page.getByRole("button", { name: "Tải landing-page.zip", exact: true }).click();
   expect((await downloaded).suggestedFilename()).toBe("landing-page.zip");
   await buyer.page.getByLabel("Tôi đã kiểm tra file", { exact: false }).check();
   await buyer.page.getByRole("button", { name: "Xác nhận nghiệm thu", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Hoàn thành");
-  await expect(buyer.page.locator(".order-detail")).toContainText("Seller nhận 0.0099 ETH");
+  await expect(buyer.page.getByLabel("Kết quả thanh toán").getByText("0.0099 ETH", { exact: true })).toBeVisible();
+  await buyer.page.locator(".order-history > summary").click();
   await expect(buyer.page.getByRole("cell", { name: "Released", exact: true })).toBeVisible();
   console.log("PASS UI create/deposit, wallet rejection, ZIP upload/download, delivery and confirmation");
   await mkdir("../.artifacts", { recursive: true });
@@ -197,13 +199,21 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã tạo trên chain");
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
+  await expect(buyer.page.getByRole("button", { name: "Mở tranh chấp", exact: true })).toBeDisabled();
+  await openOrder(seller.page, disputed);
+  await seller.page.getByLabel("Chọn ZIP mã nguồn", { exact: true }).setInputFiles({ name: "dispute-product.zip", mimeType: "application/zip", buffer: zip });
+  await seller.page.getByRole("button", { name: "Tải ZIP mã nguồn", exact: true }).click();
+  await expect(seller.page.getByRole("button", { name: "Mở tranh chấp", exact: true })).toBeDisabled();
+  await seller.page.getByLabel("Tôi xác nhận ZIP đã tải lên", { exact: false }).check();
+  await seller.page.getByRole("button", { name: "Xác nhận đã gửi code", exact: true }).click();
+  await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã bàn giao");
   await buyer.page.getByRole("button", { name: "Mở tranh chấp", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đang tranh chấp");
   await openOrder(arbiter.page, disputed);
   await arbiter.page.getByLabel("Phần Seller được hưởng (%)", { exact: true }).fill("70");
   await arbiter.page.getByRole("button", { name: "Phân xử và thanh toán", exact: true }).click();
   await expect(arbiter.page.getByTestId("order-state")).toHaveText("Đã phân xử");
-  await expect(arbiter.page.locator(".order-detail")).toContainText("Seller nhận 0.00693 ETH");
+  await expect(arbiter.page.getByLabel("Kết quả thanh toán").getByText("0.00693 ETH", { exact: true })).toBeVisible();
   console.log("PASS UI Arbiter dispute resolution 70/30");
 
   const refundId = await createDraft(`Refund ${run}`);
@@ -226,10 +236,10 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
   await openOrder(seller.page, timeoutId);
-  await seller.page.getByLabel("Loại file", { exact: true }).selectOption("product");
-  await seller.page.getByLabel("Chọn file", { exact: true }).setInputFiles({ name: "timeout.zip", mimeType: "application/zip", buffer: zip });
-  await seller.page.getByRole("button", { name: "Tải file lên", exact: true }).click();
-  await seller.page.getByRole("button", { name: "Ký bàn giao", exact: true }).click();
+  await seller.page.getByLabel("Chọn ZIP mã nguồn", { exact: true }).setInputFiles({ name: "timeout.zip", mimeType: "application/zip", buffer: zip });
+  await seller.page.getByRole("button", { name: "Tải ZIP mã nguồn", exact: true }).click();
+  await seller.page.getByLabel("Tôi xác nhận ZIP đã tải lên", { exact: false }).check();
+  await seller.page.getByRole("button", { name: "Xác nhận đã gửi code", exact: true }).click();
   await expect(seller.page.getByTestId("order-state")).toHaveText("Đã bàn giao");
   await seller.page.getByRole("button", { name: "Nhận tiền sau hạn phản hồi", exact: true }).click();
   await expect(seller.page.getByTestId("order-state")).toHaveText("Hoàn thành");

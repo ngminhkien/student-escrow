@@ -5,11 +5,12 @@ const order = (index: number) => ({ draft: { id: `00000000-0000-0000-0000-${Stri
 for (const width of [375, 1440]) test(`mocked workspace navigation and local pagination at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   const offsets: string[] = [];
+  await page.addInitScript(() => { window.ethereum = { async request({ method }) { return method === "eth_chainId" ? "0x7a69" : ["0x1111111111111111111111111111111111111111"]; } }; });
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     let json: unknown = {};
     if (url.pathname.endsWith("/health/blockchain")) json = { status: "Unavailable" };
-    else if (url.pathname.endsWith("/wallets/me")) json = { linked: false, address: null, chainId: null };
+    else if (url.pathname.endsWith("/wallets/me")) json = { linked: true, address: "0x1111111111111111111111111111111111111111", chainId: 31337 };
     else if (url.pathname.endsWith("/kyc/me")) json = { status: "NOT_SUBMITTED", isMock: true };
     else if (url.pathname.endsWith("/auth/login")) json = session;
     else if (url.pathname.endsWith("/orders")) { const skip = url.searchParams.get("skip") ?? "0"; offsets.push(skip); json = skip === "0" ? Array.from({ length: 50 }, (_, i) => order(i + 1)) : [order(51)]; }
@@ -35,7 +36,7 @@ for (const width of [375, 1440]) test(`mocked workspace navigation and local pag
   await page.screenshot({ path: `test-results/screenshots/orders-${width}.png`, fullPage: false });
   await page.getByRole("button", { name: "Tài khoản & ví", exact: true }).click();
   await expect(page.getByLabel("Họ tên demo")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Nộp KYC demo", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Nộp KYC demo", exact: true })).toBeEnabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `test-results/screenshots/account-${width}.png`, fullPage: false });

@@ -25,6 +25,8 @@ test("Delivery deadline is inclusive; refund starts strictly after", () => {
   const order = view();
   expect(actions(order, seller, network, 100).deliver).toBe(true);
   expect(actions(order, seller, network, 101).deliver).toBe(false);
+  expect(actions(order, seller, network, 100).product).toBe(true);
+  expect(actions(order, seller, network, 101).product).toBe(false);
   expect(actions(order, buyer, network, 100).refund).toBe(false);
   expect(actions(order, buyer, network, 101).refund).toBe(true);
   expect(actions(order, seller, network, 101).refund).toBe(false);
@@ -46,6 +48,21 @@ test("Only assigned arbiter can resolve disputed orders", () => {
   expect(actions(order, buyer, network, 200).resolve).toBe(false);
   expect(actions(order, seller, network, 200).evidence).toBe(true);
   expect(actions(order, arbiter, network, 200).evidence).toBe(false);
+});
+
+test("Disputes require on-chain delivery, not just an uploaded product", () => {
+  const order = view();
+  for (const state of [null, "Created", "Funded", "Disputed", "Completed", "Resolved", "Refunded"] as const) {
+    order.chain = state ? { ...view().chain!, state } : null;
+    order.files = [{ id: "zip", kind: "product", fileName: "demo.zip", length: 1, sha256: "0x" + "11".repeat(32), createdAt: "" }];
+    for (const wallet of [buyer, seller]) expect(actions(order, wallet, network, 99).dispute).toBe(false);
+  }
+  order.chain = { ...view().chain!, state: "Delivered", reviewDeadline: 110 };
+  for (const wallet of [buyer, seller]) {
+    expect(actions(order, wallet, network, 110).dispute).toBe(true);
+    expect(actions(order, wallet, network, 111).dispute).toBe(false);
+  }
+  expect(actions(order, arbiter, network, 110).dispute).toBe(false);
 });
 test("Old deployment, stale synchronization and mismatched terms block writes", () => {
   const order = view();

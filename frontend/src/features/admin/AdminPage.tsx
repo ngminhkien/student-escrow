@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { address } from "../../rules";
 import { contractAt, errorMessage, sendTransaction } from "../../wallet";
 import type { NetworkStatus, RunAction, TxRecord } from "../../types";
+import { Icon } from "../../shared/ui/Icon";
 
 export interface AdminPageProps {
   account: string; canSign: boolean; network: NetworkStatus; busy: boolean; run: RunAction; record: (tx: TxRecord) => void; revision: number;
@@ -63,15 +64,15 @@ export default function AdminPage({ account, canSign, network, busy, run, record
     };
   }
   const ready = canSign && network.status === "Ready" && !busy;
-  return <section className="panel admin-panel"><h2>Quản trị xác minh</h2>
-    <p>Quyền lấy trực tiếp từ contract của deployment hiện tại, không phải vai trò tự chọn trong tài khoản.</p>
-    <dl><dt>Ví đang chọn</dt><dd className="mono">{account || "Chưa kết nối"}</dd><dt>KYC Admin</dt><dd>{kycAdmin ? "Có" : "Không"}</dd><dt>Quản trị phân quyền</dt><dd>{owner ? "Có" : "Không"}</dd></dl>
+  return <section className="panel admin-panel"><div className="section-heading"><div><p className="page-eyebrow">QUẢN LÝ QUYỀN GIAO DỊCH</p><h2>Quản trị xác minh</h2><p className="muted">Tra cứu, xác minh và quản lý ví được phép tham gia giao dịch.</p></div><span className="surface-icon"><Icon name="shield" size={26} /></span></div>
+    <dl className="permission-grid"><div className="permission-wallet"><dt>Ví đang chọn</dt><dd className="mono">{account || "Chưa kết nối"}</dd></div><div><dt>KYC Admin</dt><dd><span className="permission-indicator" aria-hidden="true"><Icon name={kycAdmin ? "check" : "close"} size={15} /></span>{kycAdmin ? "Có" : "Không"}</dd></div><div><dt>Quản trị phân quyền</dt><dd><span className="permission-indicator" aria-hidden="true"><Icon name={owner ? "check" : "close"} size={15} /></span>{owner ? "Có" : "Không"}</dd></div></dl>
     {error && <p role="alert">{error}</p>}
-    <label>Địa chỉ ví cần quản lý<input value={target} onChange={e => { lookupGeneration.current++; setTarget(e.target.value); setLookup(null); }} placeholder="0x…" spellCheck={false} /></label>
-    <div className="row"><button className="secondary" disabled={busy || network.status !== "Ready" || !target} onClick={() => void run("Tra cứu ví", inspect)}>Tra cứu</button>
+    <div className="admin-target"><p className="page-eyebrow">TRA CỨU VÍ</p><label>Địa chỉ ví cần quản lý<input value={target} onChange={e => { lookupGeneration.current++; setTarget(e.target.value); setLookup(null); }} placeholder="Nhập địa chỉ ví 0x…" spellCheck={false} /></label>
+    <div className="row"><button className={lookup ? "secondary" : undefined} disabled={busy || network.status !== "Ready" || !target} onClick={() => void run("Tra cứu ví", inspect)}><Icon name="search" size={17} />Tra cứu</button>
       <button disabled={!ready || !kycAdmin || !target || !lookup} onClick={() => void run("Xác minh ví on-chain", () => verify(true))}>Xác minh ví</button>
       <button className="secondary" disabled={!ready || !kycAdmin || !target || !lookup} onClick={() => void run("Thu hồi xác minh", () => verify(false))}>Thu hồi xác minh</button></div>
     {lookup && <p className="banner"><span className="mono">{lookup.address}</span><br />Xác minh: {lookup.verified ? "Có" : "Không"} · KYC Admin: {lookup.kycAdmin ? "Có" : "Không"}</p>}
+    </div>
     <p className="muted">Tra cứu địa chỉ để xem quyền và trạng thái hiện tại trước khi thay đổi. Xác minh là giao dịch cần gas. Thu hồi chặn tạo/nạp đơn mới, không ngăn thanh toán các đơn đã Funded.</p>
     <details><summary>Phân quyền KYC Admin</summary><p>Ví có DEFAULT_ADMIN_ROLE có thể cấp/thu hồi quyền xác minh cho ví khác.</p>
       <div className="row"><button disabled={!ready || !owner || !target || !role || !lookup} onClick={() => void run("Cấp quyền KYC Admin", () => changeRole(true))}>Cấp quyền KYC Admin</button>

@@ -53,11 +53,11 @@ export function actions(view: OrderView, account: string, network: NetworkStatus
     deposit: valid && state === "Created" && buyer && beforeDelivery,
     deliver: valid && state === "Funded" && seller && beforeDelivery,
     confirm: valid && state === "Delivered" && buyer && beforeReview && view.deliveryFileMatchesChain,
-    dispute: valid && (buyer || seller) && ((state === "Funded" && beforeDelivery) || (state === "Delivered" && beforeReview)),
+    dispute: valid && (buyer || seller) && state === "Delivered" && beforeReview,
     refund: valid && state === "Funded" && buyer && !beforeDelivery,
     claim: valid && state === "Delivered" && seller && !beforeReview,
     resolve: valid && state === "Disputed" && arbiter,
-    product: valid && state === "Funded" && seller && !view.files.some(f => f.kind === "product"),
+    product: valid && state === "Funded" && seller && beforeDelivery && !view.files.some(f => f.kind === "product"),
     evidence: valid && (buyer || seller) && ["Funded", "Delivered", "Disputed"].includes(state ?? "")
       && view.files.filter(f => f.kind === "evidence").length < 5
   };

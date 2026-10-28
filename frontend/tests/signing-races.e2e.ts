@@ -71,7 +71,7 @@ for (const stage of ["staticCall", "estimateGas"]) test(`mocked order logout dur
   }, { session, account, hash: network.deploymentBlockHash, stage });
   await page.route("**/rpc", async route => {
     const input = route.request().postDataJSON();
-    const answer = (rpc: any) => ({ jsonrpc: "2.0", id: rpc.id, result: rpc.method === "eth_chainId" ? "0x7a69" : { timestamp: "0x6553f100" } });
+    const answer = (rpc: any) => ({ jsonrpc: "2.0", id: rpc.id, result: rpc.method === "eth_chainId" ? "0x7a69" : rpc.method === "eth_call" ? "0x" + "0".repeat(63) + "1" : { timestamp: "0x6553f100" } });
     await route.fulfill({ json: Array.isArray(input) ? input.map(answer) : answer(input) });
   });
   await page.route("**/api/**", route => {

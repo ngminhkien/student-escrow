@@ -5,6 +5,7 @@ import { health } from "../../services/health";
 import { address, amountWei, eth, sameAddress, validateTerms } from "../../domain/rules";
 import { assertWallet, errorMessage, pendingTimestamp } from "../../wallet";
 import type { OrdersProps } from "./types";
+const DEFAULT_ARBITER_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 export default function DraftForm({ session, account, network, canSign, busy, run, chainTime, onCreated }: OrdersProps & { onCreated: (id: string) => void }) {
   const [formError, setFormError] = useState("");
   const [amount, setAmount] = useState("0.01");
@@ -47,7 +48,7 @@ export default function DraftForm({ session, account, network, canSign, busy, ru
     });
   }
   return <form className="draft-form" onSubmit={submit}><h3>Bản nháp mới</h3><p>Điều khoản cố định sau khi lưu. Tạo trên chain và nạp ETH là hai giao dịch riêng sau bước này.</p>
-    <p className="mono small">Ví Buyer: {account}</p><div className="grid"><label>Ví Seller<input name="seller" required placeholder="0x…" spellCheck={false} /></label><label>Ví Arbiter<input name="arbiter" required placeholder="0x…" spellCheck={false} /></label></div>
+    <p className="mono small">Ví Buyer: {account}</p><div className="grid"><label>Ví Seller<input name="seller" required placeholder="0x…" spellCheck={false} /></label><label>Ví Arbiter<input name="arbiter" required defaultValue={DEFAULT_ARBITER_ADDRESS} placeholder="0x…" spellCheck={false} /></label></div>
     <label>Nội dung công việc<textarea name="description" required maxLength={4000} placeholder="Thiết kế và lập trình landing page…" /></label>
     <label>Tiêu chí nghiệm thu<textarea name="criteria" required maxLength={4000} placeholder="Các mục bắt buộc, kích thước màn hình cần hỗ trợ…" /></label>
     <div className="grid three"><label>Số tiền (ETH)<input name="amount" inputMode="decimal" required value={amount} onChange={event => setAmount(event.target.value)} /></label>

@@ -2,13 +2,18 @@
 
 Giao diện ứng dụng với trang đăng nhập riêng, sidebar theo tài khoản, thẻ ví/số dư/gas và bố cục thích ứng điện thoại. React + TypeScript + Vite + ethers; không có UI framework. API và smart contract vẫn quyết định quyền/trạng thái. File ABI được import trực tiếp từ `blockchain/deployment/Escrow.abi.json`, không duy trì một bản ABI riêng.
 
+Thiết kế áp dụng skill local `ui-ux-pro-max` theo hướng Minimalism & Swiss Style, giới hạn bảng màu trắng/đen/xám theo yêu cầu. Quy tắc đã chọn nằm ở `design-system/studentescrow/MASTER.md`. Sidebar tối, vùng làm việc sáng, tổng quan tính từ các đơn đã tải; chi tiết đơn ưu tiên workflow, file và thao tác, với điều khoản ở cột phụ. Trang đăng nhập hỗ trợ hiện/ẩn mật khẩu, mã đơn có nút sao chép. CSS dùng token chung và không tải font hoặc thư viện giao diện bên ngoài.
+
 ## Đăng nhập, ví và giao diện theo tài khoản
 
 - `viego.hvnh@gmail.com` mở trang **Quản trị**, không có mục Đơn hàng. Các tài khoản khác mở **Đơn hàng**, không có mục Quản trị. Cả hai đều có Tài khoản & ví. Email được cấu hình trong `src/domain/access.ts`; đây là lựa chọn giao diện, không tự cấp quyền contract.
 - Sau đăng nhập hoặc khôi phục phiên, ứng dụng đọc ví đã liên kết từ API, tự yêu cầu kết nối MetaMask và chuyển về mạng local. Nếu sai ví, MetaMask mở hộp chọn tài khoản; người dùng phải chọn đúng địa chỉ được hiển thị. Website không thể âm thầm đổi ví hoặc thêm private key. Yêu cầu bị từ chối không được tự lặp; bấm **Đồng bộ ví** để thử lại.
 - Tài khoản chưa liên kết ví cần vào Tài khoản & ví, chọn ví và **Ký và liên kết ví** một lần. Không tự liên kết một địa chỉ đang chọn mà chưa có chữ ký xác nhận.
+- Khi chưa kết nối, sai ví, sai mạng hoặc đang kiểm tra ví, FE hiển thị cảnh báo kèm ví liên kết/ví hiện tại và khóa các nút trong đơn hàng, quản trị, lịch sử giao dịch và form KYC. Nội dung đã tải vẫn đọc được. Điều hướng, đăng xuất, đồng bộ và thiết lập ví vẫn hoạt động để khôi phục kết nối. Chọn đúng ví/mạng sẽ tự mở khóa; các điều kiện quyền contract và trạng thái đơn vẫn được kiểm tra riêng.
 - Thẻ ví đọc số dư ETH và giá gas mỗi 15 giây khi blockchain sẵn sàng. Giá gas (Gwei) không phải tổng phí giao dịch. Trước từng giao dịch, ứng dụng ước tính gas với dự phòng 20% và kiểm tra số dư đủ cho giá trị giao dịch cộng gas theo phí mạng hiện tại. MetaMask hiển thị phí cuối cùng trước khi người dùng xác nhận.
 - Ví của tài khoản quản trị vẫn cần `KYC_ADMIN_ROLE` / `DEFAULT_ADMIN_ROLE` trên deployment hiện tại; hardcode email không cấp các quyền này. Luồng tự kết nối không gửi giao dịch hoặc ký thay người dùng.
+- Trước khi tạo đơn/nạp ETH, FE đọc `verifiedWallets` của Buyer và Seller trên contract hiện tại. Ví nào chưa được xác minh sẽ hiện ngay cạnh nút thao tác, kèm địa chỉ và hướng dẫn Admin xác minh; nút tạo/nạp bị khóa đến khi đủ điều kiện. Kiểm tra tự cập nhật mỗi 5 giây và có nút kiểm tra lại. Lỗi giao dịch hiển thị tại khu vực thao tác và được đưa vào vùng nhìn thấy, thay vì chỉ xuất hiện ở đầu trang. `Ready` là trạng thái worker, không phải trạng thái tạo đơn.
+- **Kiểm tra blockchain MetaMask** trên thẻ ví chỉ đọc chain ID và dữ liệu block, không mở yêu cầu ký. `127.0.0.1:5173` là website kết nối với extension; RPC mạng local cần là `http://127.0.0.1:8545`. Nếu hash theo số block không khớp (có thể do cache sau reset Hardhat), kiểm tra thêm block theo hash và `eth_getCode` với `{ blockHash, requireCanonical: true }` theo EIP-1898, rồi so sánh mã contract với RPC của API tại cùng block. Chỉ chấp nhận khi block canonical và mã contract khớp; không xác minh được thì vẫn chặn giao dịch. Kết quả chẩn đoán hiển thị hai hash để phân biệt cache và khác blockchain.
 
 ## Chạy cả phần 4 và 5
 
@@ -75,8 +80,8 @@ Có thể dùng một trình duyệt và lần lượt đăng xuất/đăng nh�
 | 2 | Buyer | Đơn hàng → Tạo bản nháp; nhập Seller, Arbiter, điều khoản, ETH, hạn giao và khoảng phản hồi |
 | 3 | Buyer | Mở draft → Tạo đơn trên chain → xác nhận MetaMask; chờ `Đã tạo trên chain` |
 | 4 | Buyer | Bấm Nạp ETH → xác nhận MetaMask; chờ `Đã ký quỹ` |
-| 5 | Seller | Đăng nhập/chọn đúng ví; mở cùng đơn (danh sách hoặc UUID Buyer gửi) |
-| 6 | Seller | Chọn Sản phẩm ZIP → Upload file; sau đó Ký bàn giao → xác nhận MetaMask |
+| 5 | Seller | Đăng nhập/chọn đúng ví; vào Đơn tôi bán và mở cùng đơn (danh sách hoặc UUID Buyer gửi) |
+| 6 | Seller | Chọn ZIP mã nguồn → Tải ZIP mã nguồn; tích xác nhận ZIP hoàn chỉnh → Xác nhận đã gửi code → xác nhận giao dịch MetaMask |
 | 7 | Buyer | Chờ `Đã bàn giao`; tải ZIP, frontend kiểm tra SHA-256 trước khi tải; xem hash khớp và nghiệm thu nội dung |
 | 8 | Buyer | Tích ô đã kiểm tra sản phẩm → Xác nhận nghiệm thu → xác nhận MetaMask |
 | 9 | Các bên | Chờ `Hoàn thành`, xem tiền Seller/phí và event Released trong lịch sử |
@@ -91,6 +96,8 @@ Compress-Archive -Path .runtime\demo-product\index.html -DestinationPath .runtim
 
 Upload `.runtime/demo-product.zip`. Một ZIP tối đa 50 MB; một bản bất biến, không thay thế/xóa. Bằng chứng PNG/JPG/JPEG/PDF tối đa 5 MB/file, 5 file/đơn cho cả Buyer/Seller cộng lại. Tổng 75 MB. Chỉ người thuộc đơn tải được file, kể cả sau khi kết thúc. File không được render hoặc giải nén trong frontend/server.
 
+Giao diện phân biệt vai trò theo từng đơn: **Đơn tôi mua** có tạo đơn/ký quỹ/nghiệm thu; **Đơn tôi bán** có quy trình chờ ký quỹ/tải ZIP/xác nhận bàn giao/chờ nghiệm thu. Nút **Xác nhận đã gửi code** luôn hiện trong chi tiết đơn của Seller và hiển thị lý do bị khóa nếu thiếu điều kiện (chưa tạo trên chain, chưa nạp ETH, chưa có ZIP, sai ví, quá hạn hoặc deployment cũ). Tải ZIP là request HTTP, không mở MetaMask; chỉ bước xác nhận bàn giao gọi `markDelivered` và mở yêu cầu giao dịch. Sau khi đã gửi giao dịch, nút được khóa và lưu dấu theo đơn/deployment để tránh gửi trùng trong lúc chờ worker. Bằng chứng được upload qua mục riêng, không thay thế ZIP sản phẩm.
+
 ## Các nhánh còn lại
 
 - **Tranh chấp:** tạo một đơn khác, nạp tiền. Buyer hoặc Seller bấm **Mở tranh chấp** ở Funded/Delivered trong hạn. Hai bên upload bằng chứng nếu cần. Arbiter đăng nhập/chọn đúng ví, mở đơn, nhập phần Seller 0–100% (tối đa 2 số thập phân), xem phân bổ dự kiến rồi **Phân xử và thanh toán**. Ví dụ 0.01 ETH, 70% Seller → Seller thực nhận 0.00693, Buyer hoàn 0.003, phí 0.00007 ETH.
@@ -102,6 +109,8 @@ Upload `.runtime/demo-product.zip`. Một ZIP tối đa 50 MB; một bản bất
 - **Restart API:** dữ liệu SQL và file giữ nguyên; đăng nhập lại vì JWT development dùng key tạm. Worker tiếp tục checkpoint. **Restart node:** deploy lại, Admin xác minh lại. Đơn deployment cũ hiện Archived và không cho gửi giao dịch/upload mới.
 
 Giao dịch có thể đã xác nhận trên chain nhưng SQL chưa kịp cập nhật. Mục **Giao dịch của ví hiện tại** có hash, trạng thái và nút kiểm tra receipt. UI chỉ đổi trạng thái đơn theo API sau worker, không dựa trên việc bấm nút hoặc client gửi tx hash. Không reset/redeploy node trong lúc MetaMask đang chờ ký.
+
+Mỗi bản nháp chỉ tạo trên chain một lần. FE kiểm tra `usedClientReferences` trên contract và khóa nút khi đã có giao dịch đang chờ hoặc đã tạo thành công, kể cả khi SQL chưa đồng bộ. Hash giao dịch đang chờ được lưu theo bản nháp/deployment trong sessionStorage để giữ khóa sau khi tải lại trang. Từ chối ký, giao dịch bị hủy hoặc receipt thất bại cho phép thử lại; kết quả chưa xác định tiếp tục khóa để tránh gửi trùng. Bước nạp ETH vẫn chờ trạng thái từ API.
 
 ## Test tự động
 
@@ -167,5 +176,11 @@ RPC_PROXY_TARGET=http://127.0.0.1:8545
 Đây là đích proxy cho Vite dev/preview, không phải bí mật và không có tiền tố `VITE_`. `/api` giữ nguyên prefix; `/rpc` bỏ prefix khi chuyển tới JSON-RPC. Không đặt private key, seed phrase, JWT signing key hoặc mật khẩu SQL trong frontend. Bản build tĩnh không mang theo Vite proxy: hosting phải tự cấu hình route cùng origin `/api` và `/rpc`, HTTPS và chính sách truy cập thích hợp. `preview` chỉ dùng xem bản build local.
 
 ## Phạm vi kiểm chứng
+
+Giao diện đơn hàng tách thành ba màn hình: danh sách tại `/`, tạo bản nháp tại `/?create=1`, và chi tiết giao dịch tại `/?order=<UUID>`. URL chi tiết có thể tải lại hoặc chia sẻ cho bên tham gia đơn. Nút Back/Forward và “Quay lại đơn hàng” hoạt động; bộ lọc được giữ khi chuyển màn hình trong workspace. Bấm tên đơn để mở chi tiết, hoặc dùng thao tác mở tab mới của trình duyệt trên liên kết đó. Danh sách không chứa biểu mẫu hay thao tác của giao dịch đang chọn.
+
+“Số dư & kết nối” chứa số dư, gas và kiểm tra blockchain. Quy tắc, hướng dẫn từng bước, hash và lịch sử nằm trong các mục mở rộng. Đơn hoàn tất hiển thị số tiền Seller nhận, phí nền tảng và khoản hoàn Buyer từ dữ liệu đồng bộ. Kiểm tra ví, chấp thuận sản phẩm và xác nhận MetaMask vẫn bắt buộc.
+
+`npm.cmd run test:ui` dùng API/RPC giả; kiểm tra điều hướng và luồng Buyer/Seller mà không ghi dữ liệu vào SQL hoặc blockchain local. Các ảnh kiểm tra danh sách/chi tiết được lưu tại `.artifacts/order-pages/` ở thư mục gốc repository.
 
 Build/unit test không cần SQL hoặc node blockchain đang chạy. Test browser hoàn chỉnh cần API, SQL, worker, Hardhat và manifest deployment local; các lệnh test ở trên không khởi tạo thay các dịch vụ đó. Không có trạng thái Ready thì không thể kết luận luồng ký quỹ đã được kiểm chứng. Kiểm tra MetaMask extension thật vẫn thực hiện thủ công theo hướng dẫn vai trò và kịch bản ở trên. Đây là demo ETH local với KYC fixture; chưa có KYC thật, Sepolia, analytics/AI hoặc cấu hình production.

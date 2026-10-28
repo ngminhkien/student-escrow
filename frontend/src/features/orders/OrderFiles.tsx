@@ -7,6 +7,7 @@ import { actions, validateTerms } from "../../domain/rules";
 import { pendingTimestamp, assertWallet } from "../../wallet";
 import type { OrderFile, OrderView } from "../../domain/types";
 import type { OrdersProps } from "./types";
+import { Icon } from "../../shared/ui/Icon";
 export default function OrderFiles({ session, account, canSign, network, chainTime, busy, run, view, onHashMismatch, onRefresh }: OrdersProps & { view: OrderView; onHashMismatch: () => void; onRefresh: () => void }) {
   const [fileCheck, setFileCheck] = useState("");
   const allowed = actions(view, account, network, chainTime);
@@ -54,21 +55,25 @@ export default function OrderFiles({ session, account, canSign, network, chainTi
     link.href = url; link.download = file.fileName; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
-  return <>
-    <hr /><h3>File sản phẩm & bằng chứng</h3>
-    <p>ZIP: tối đa 50 MB, một bản bất biến. Bằng chứng: PNG/JPG/JPEG/PDF, tối đa 5 MB/file và 5 file/đơn. Tổng dung lượng tối đa 75 MB. MB = 1.000.000 byte.</p>
-    <p className="small muted">Đã dùng {view.files.reduce((sum, file) => sum + file.length, 0).toLocaleString("vi-VN")} / 75.000.000 byte · {view.files.filter(file => file.kind === "evidence").length} / 5 bằng chứng.</p>
-    {(allowed.product || allowed.evidence) && <form className="upload-form" onSubmit={upload}>
-      <label>Loại file<select name="kind" aria-label="Loại file" key={`${allowed.product}-${allowed.evidence}`}>
-        {allowed.product && <option value="product">Sản phẩm ZIP</option>}{allowed.evidence && <option value="evidence">Bằng chứng</option>}
-      </select></label><label>Chọn file<input type="file" name="file" required accept=".zip,.png,.jpg,.jpeg,.pdf" /></label>
-      <button disabled={busy || !canSign}>Tải file lên</button>
+  return <section className="order-files" aria-label="File sản phẩm và bằng chứng">
+    <div className="file-section-title"><span className="surface-icon"><Icon name="code" size={22} /></span><h3>Sản phẩm bàn giao</h3></div>
+    {allowed.product && <form className="upload-form product-upload" onSubmit={upload} aria-label="Tải ZIP mã nguồn">
+      <input type="hidden" name="kind" value="product" />
+      <span className="upload-mark" aria-hidden="true"><Icon name="upload" size={26} /></span>
+      <label>Chọn ZIP mã nguồn<input type="file" name="file" required accept=".zip" /></label>
+      <button disabled={busy || !canSign}>Tải ZIP mã nguồn</button>
     </form>}
-    {(["product", "evidence"] as const).map(kind => <section key={kind} aria-label={kind === "product" ? "Sản phẩm bàn giao" : "Bằng chứng"}><h4>{kind === "product" ? "Sản phẩm bàn giao" : "Bằng chứng"}</h4>{!view.files.some(file => file.kind === kind) ? <p>{kind === "product" ? "Chưa có ZIP sản phẩm." : "Chưa có bằng chứng."}</p> : <ul className="files">{view.files.filter(file => file.kind === kind).map(file => <li key={file.id}>
+    {allowed.product && <p className="muted">ZIP tối đa 50 MB · Xác nhận bàn giao sau khi tải lên.</p>}
+    {allowed.evidence && <details><summary>Bổ sung bằng chứng</summary><form className="upload-form" onSubmit={upload}>
+      <input type="hidden" name="kind" value="evidence" />
+      <label>Chọn bằng chứng<input type="file" name="file" required accept=".png,.jpg,.jpeg,.pdf" /></label>
+      <button disabled={busy || !canSign}>Tải bằng chứng</button>
+    </form></details>}
+    {(["product", "evidence"] as const).filter(kind => kind === "product" || view.files.some(file => file.kind === kind)).map(kind => <section key={kind} aria-label={kind === "product" ? "Sản phẩm bàn giao" : "Bằng chứng"}>{kind === "evidence" && <h4>Bằng chứng</h4>}{!view.files.some(file => file.kind === kind) ? <p>Chưa có ZIP sản phẩm.</p> : <ul className="files">{view.files.filter(file => file.kind === kind).map(file => <li key={file.id}>
       <div><strong>{file.fileName}</strong> · {file.kind === "product" ? "Sản phẩm" : "Bằng chứng"} · {file.length.toLocaleString("vi-VN")} byte
-        <div className="mono small">SHA-256: {file.sha256}</div></div><button className="secondary" disabled={busy} onClick={() => void run("Tải và kiểm tra hash", () => download(file))}>Tải {file.fileName}</button>
+        <details><summary>Hash file</summary><div className="mono small">SHA-256: {file.sha256}</div></details></div><button className="secondary" disabled={busy} onClick={() => void run("Tải và kiểm tra hash", () => download(file))}>Tải {file.fileName}</button>
     </li>)}</ul>}</section>)}
-    {view.chain?.deliveryHash && <p data-testid="delivery-match">Hash bàn giao: <span className="mono small">{view.chain.deliveryHash}</span><br />{view.deliveryFileMatchesChain ? "Khớp ZIP trên hệ thống." : "Không khớp ZIP trên hệ thống."}</p>}
+    {view.chain?.deliveryHash && <p data-testid="delivery-match">{view.deliveryFileMatchesChain ? "✓ File khớp bản bàn giao trên chain." : "Không khớp ZIP trên hệ thống."}</p>}
     <details><summary>Kiểm tra hash file có trên máy</summary><label>File cần kiểm tra<input type="file" onChange={event => {
       const file = event.currentTarget.files?.[0]; if (!file) return;
       setFileCheck(""); void run("Kiểm tra SHA-256", async () => {
@@ -78,6 +83,6 @@ export default function OrderFiles({ session, account, canSign, network, chainTi
         setFileCheck(`${expected ? hash === expected ? "KHỚP" : "KHÔNG KHỚP" : "Chưa có hash đối chiếu"}: ${hash}`);
       });
     }} /></label><p className="mono small">{fileCheck}</p></details>
-  </>;
+  </section>;
 }
 

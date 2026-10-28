@@ -61,6 +61,7 @@ test("mocked wallet balance and gas price are displayed after login", async ({ p
     return route.fulfill({ json: Array.isArray(input) ? input.map(answer) : answer(input) });
   });
   await page.goto("/");
+  await page.getByText("Số dư & kết nối", { exact: true }).click();
   await expect(page.getByText("1.0 ETH", { exact: true })).toBeVisible();
   await expect(page.getByText("1.0 Gwei", { exact: true })).toBeVisible();
 });

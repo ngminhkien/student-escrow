@@ -58,12 +58,24 @@ export function useWallet() {
     void refresh();
     const provider = injected();
     const changed = () => { void refresh(); };
-    provider?.on?.("accountsChanged", changed); provider?.on?.("chainChanged", changed); provider?.on?.("disconnect", changed);
+    const accountsChanged = (...args: unknown[]) => {
+      generation.current++;
+      const accounts = args[0];
+      setAccount(Array.isArray(accounts) && typeof accounts[0] === "string" ? accounts[0] : "");
+      void refresh();
+    };
+    const chainChanged = (...args: unknown[]) => {
+      generation.current++;
+      try { setChainId(String(BigInt(String(args[0])))); } catch { setChainId(""); }
+      void refresh();
+    };
+    const disconnected = () => { generation.current++; setAccount(""); setChainId(""); };
+    provider?.on?.("accountsChanged", accountsChanged); provider?.on?.("chainChanged", chainChanged); provider?.on?.("disconnect", disconnected);
     window.addEventListener("focus", changed);
     return () => {
       generation.current++;
-      provider?.removeListener?.("accountsChanged", changed); provider?.removeListener?.("chainChanged", changed);
-      provider?.removeListener?.("disconnect", changed); window.removeEventListener("focus", changed);
+      provider?.removeListener?.("accountsChanged", accountsChanged); provider?.removeListener?.("chainChanged", chainChanged);
+      provider?.removeListener?.("disconnect", disconnected); window.removeEventListener("focus", changed);
     };
   }, [revision, refresh]);
   async function connect() {

@@ -5,6 +5,7 @@ import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { assertWallet, contractAt, errorMessage, injected } from "../../wallet";
 import { sameAddress } from "../../rules";
 import type { Kyc, LinkedWallet, NetworkStatus, RunAction, Session } from "../../types";
+import { Icon } from "../../shared/ui/Icon";
 
 export interface AccountPageProps {
   session: Session; account: string; canSign: boolean; network: NetworkStatus; busy: boolean; run: RunAction;
@@ -94,12 +95,13 @@ export default function AccountPage({ session, account, canSign, network, busy, 
   }
   function submitKyc(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canSign || !wallet?.linked || !sameAddress(wallet.address, account)) return;
     const data = new FormData(event.currentTarget);
     void run("Nộp KYC demo", async () => setKyc(await postKyc(session.accessToken, {
       fullName: String(data.get("fullName") ?? ""), studentNumber: String(data.get("studentNumber") ?? ""), documentReference: String(data.get("documentReference") ?? ""), selfieReference: String(data.get("selfieReference") ?? "") })));
   }
   return <div className="account-page"><div className="workflow-strip"><span>01 · Đăng nhập</span><span>02 · Liên kết ví</span><span>03 · Xác minh on-chain</span></div><section className="panel profile-card"><div className="profile-initial" aria-hidden="true">{session.user.fullName.slice(0, 1).toUpperCase()}</div><div><p className="page-eyebrow">TÀI KHOẢN CỦA BẠN</p><h2>{session.user.fullName}</h2><p className="muted">{session.user.email}</p></div></section><div className="grid account-grid">
-    <section className="panel"><h2>Liên kết ví</h2><p className="muted">Một tài khoản, một địa chỉ ví cố định.</p>
+    <section className="panel"><div className="card-heading"><span className="surface-icon"><Icon name="wallet" size={23} /></span><div><h2>Liên kết ví</h2><p className="muted">Một tài khoản, một địa chỉ ví cố định.</p></div></div>
       {error && <p role="alert">{error}</p>}
       <dl><dt>Ví liên kết</dt><dd className="mono">{wallet?.address ?? "Chưa liên kết"}</dd><dt>Mạng của ví liên kết</dt><dd>{wallet?.chainId ?? "—"}</dd></dl>
       <dl><dt>Ví đang chọn trong MetaMask</dt><dd className="mono">{account || "Chưa kết nối"}</dd></dl>
@@ -110,14 +112,17 @@ export default function AccountPage({ session, account, canSign, network, busy, 
       <hr /><h3>Xác minh on-chain</h3><p>{verified === null ? "Chưa đọc được trạng thái contract." : verified ? "Đã được Admin xác minh trên contract hiện tại." : "Chưa được Admin xác minh trên contract hiện tại."}</p>
       <p className="muted">Buyer và Seller cần xác minh on-chain để tạo/nạp đơn. KYC mock bên cạnh không tự cấp quyền này. Sau khi deploy lại, Admin cần xác minh lại.</p>
     </section>
-    <section className="panel"><h2>Xác minh thử nghiệm</h2><p>Trạng thái: <StatusBadge status={kyc?.status ?? "Đang tải"} />{kyc?.reasonCode && ` · ${kyc.reasonCode}`}</p>
+    <section className="panel"><div className="card-heading"><span className="surface-icon"><Icon name="shield" size={23} /></span><div><h2>Xác minh thử nghiệm</h2><p className="muted">Hồ sơ mẫu dành cho môi trường demo.</p></div></div><p>Trạng thái: <StatusBadge status={kyc?.status ?? "Đang tải"} />{kyc?.reasonCode && ` · ${kyc.reasonCode}`}</p>
       <p>Chỉ dùng dữ liệu giả. Chọn PASS/FAIL để thử quy trình; không tải giấy tờ thật.</p>
       <form onSubmit={submitKyc}>
+        <fieldset className="wallet-action-gate" disabled={busy || !canSign || !wallet?.linked || !sameAddress(wallet?.address, account)}>
+        <legend className="sr-only">Hồ sơ xác minh yêu cầu đúng ví liên kết</legend>
         <label>Họ tên demo<input name="fullName" required minLength={2} maxLength={100} defaultValue={session.user.fullName} /></label>
         <label>Mã sinh viên demo<input name="studentNumber" required pattern="DEMO-[A-Z0-9-]{3,24}" defaultValue="DEMO-123456" /></label>
         <label>Giấy tờ mẫu<select name="documentReference"><option value="DEMO-DOCUMENT-PASS">PASS</option><option value="DEMO-DOCUMENT-FAIL">FAIL</option></select></label>
         <label>Ảnh mẫu<select name="selfieReference"><option value="DEMO-SELFIE-PASS">PASS</option><option value="DEMO-SELFIE-FAIL">FAIL</option></select></label>
-        <button disabled={busy || !wallet?.linked || kyc?.status === "VERIFIED"}>Nộp KYC demo</button>
+        <button disabled={busy || !canSign || !wallet?.linked || kyc?.status === "VERIFIED"}>Nộp KYC demo</button>
+        </fieldset>
       </form>
       {kyc?.status === "VERIFIED" && <p>Hồ sơ VERIFIED không nhận nộp lại. Hồ sơ REJECTED có thể sửa mẫu và nộp lại.</p>}
     </section>

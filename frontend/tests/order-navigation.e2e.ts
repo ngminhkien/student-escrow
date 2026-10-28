@@ -1,0 +1,72 @@
+import { test, expect } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+for (const width of [375, 1440]) test(`mocked order list and transaction have separate URLs and preserve navigation at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
+  const account = "0x1111111111111111111111111111111111111111";
+  const network = { status: "Ready", chainId: "31337", deploymentId: "navigation", deploymentBlock: 1, deploymentBlockHash: "0x" + "ab".repeat(32), contractAddress: "0x4444444444444444444444444444444444444444" };
+  const draft = { id: "00000000-0000-0000-0000-000000000001", deploymentId: network.deploymentId, buyer: account, seller: "0x2222222222222222222222222222222222222222", arbiter: "0x3333333333333333333333333333333333333333", amountWei: "10000000000000000", description: "Thiết kế landing page coffee", acceptanceCriteria: "HTML và CSS responsive", deliveryDeadline: 2000000000, reviewWindow: 3600, clientReference: "0x" + "11".repeat(32), termsJson: "{}", termsHash: "0x" + "22".repeat(32) };
+  const view = { draft, chain: { orderId: "1", state: "Completed", sellerNetWei: "9900000000000000", platformFeeWei: "100000000000000", buyerRefundWei: "0", reviewDeadline: 1700003600, deliveryHash: "0x" + "33".repeat(32) }, termsMatch: true, syncStatus: "Ready", lastIndexedBlock: 7, files: [{ id: "product", kind: "product", fileName: "landing-page.zip", length: 6855, sha256: "0x" + "33".repeat(32) }], deliveryFileMatchesChain: true };
+  await page.addInitScript(account => {
+    sessionStorage.setItem("escrow.session", JSON.stringify({ accessToken: "navigation", expiresAt: "2099-01-01T00:00:00Z", user: { id: "buyer", fullName: "Người mua", email: "buyer@gmail.com" } }));
+    window.ethereum = { async request({ method }) {
+      if (method === "eth_chainId") return "0x7a69";
+      if (method === "eth_accounts" || method === "eth_requestAccounts") return [account];
+      throw new Error(`Unexpected wallet request ${method}`);
+    } };
+  }, account);
+  await page.route("**/api/**", route => {
+    const path = new URL(route.request().url()).pathname;
+    return route.fulfill({ json: path.endsWith("/health/blockchain") ? network : path.endsWith("/wallets/me") ? { linked: true, address: account, chainId: 31337 } : path.endsWith("/orders") ? [view] : path.endsWith("/events") ? [] : view });
+  });
+  await page.route("**/rpc", route => {
+    const input = route.request().postDataJSON();
+    const answer = (r: any) => ({ jsonrpc: "2.0", id: r.id, result: r.method === "eth_chainId" ? "0x7a69" : r.method === "eth_getBalance" ? "0xde0b6b3a7640000" : r.method === "eth_gasPrice" ? "0x3b9aca00" : r.method === "eth_call" ? "0x" + "0".repeat(63) + "1" : { timestamp: "0x6553f100" } });
+    return route.fulfill({ json: Array.isArray(input) ? input.map(answer) : answer(input) });
+  });
+  await page.goto("/");
+  const listHeading = page.getByRole("heading", { name: "Đơn hàng của bạn", exact: true });
+  const detail = page.getByRole("region", { name: "Chi tiết đơn", exact: true });
+  await expect(listHeading).toBeVisible();
+  await expect(detail).toHaveCount(0);
+  await page.getByLabel("Tìm trong các đơn đã tải").fill("coffee");
+  await mkdir("../.artifacts/order-pages", { recursive: true });
+  await page.screenshot({ path: `../.artifacts/order-pages/list-${width}.png`, fullPage: true });
+  await page.getByRole("button", { name: `Mở đơn ${draft.description}`, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`order=${draft.id}`));
+  await expect(detail).toBeVisible();
+  await expect(listHeading).toBeHidden();
+  await expect(detail.getByRole("heading", { name: "Thanh toán thành công" })).toBeVisible();
+  await expect(detail.getByText("0.0099 ETH", { exact: true })).toBeVisible();
+  await expect(detail.locator(".trade-rules")).not.toHaveAttribute("open", "");
+  await detail.getByText("Quy tắc giao dịch", { exact: true }).click();
+  await expect(detail.locator(".trade-rules li").first()).toBeVisible();
+  await detail.getByText("Quy tắc giao dịch", { exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); window.scrollTo(0, 0); });
+  await page.screenshot({ path: `../.artifacts/order-pages/detail-${width}.png`, fullPage: true });
+  await page.goBack();
+  await expect(listHeading).toBeVisible();
+  await expect(page.getByLabel("Tìm trong các đơn đã tải")).toHaveValue("coffee");
+  await page.goForward();
+  await expect(detail).toBeVisible();
+  await page.reload();
+  await expect(detail).toBeVisible();
+  await expect(listHeading).toBeHidden();
+  await page.getByRole("button", { name: "Quay lại đơn hàng", exact: true }).click();
+  await expect(listHeading).toBeVisible();
+  await expect(detail).toHaveCount(0);
+  await page.getByRole("button", { name: "Tạo bản nháp", exact: true }).click();
+  await expect(page).toHaveURL(/create=1/);
+  await expect(page.getByRole("heading", { name: "Tạo giao dịch mới", exact: true })).toBeVisible();
+  await expect(listHeading).toBeHidden();
+  await expect(detail).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goBack();
+  await expect(listHeading).toBeVisible();
+  await page.getByRole("link", { name: draft.description, exact: true }).click();
+  await expect(detail).toBeVisible();
+  await page.getByRole("navigation", { name: "Chức năng", exact: true }).getByRole("button", { name: "Đơn hàng", exact: true }).click();
+  await expect(listHeading).toBeVisible();
+  await expect(detail).toHaveCount(0);
+});
