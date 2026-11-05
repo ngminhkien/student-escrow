@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using StudentEscrow.Domain.Users;
 using StudentEscrow.Domain.Wallets;
 using StudentEscrow.Domain.Kyc;
+using StudentEscrow.Domain.Ledger;
 
 namespace StudentEscrow.Infrastructure.Persistence;
 
@@ -11,6 +12,10 @@ public sealed class StudentEscrowDbContext(DbContextOptions<StudentEscrowDbConte
     public DbSet<WalletLink> WalletLinks => Set<WalletLink>();
     public DbSet<WalletChallenge> WalletChallenges => Set<WalletChallenge>();
     public DbSet<KycSubmission> KycSubmissions => Set<KycSubmission>();
+    public DbSet<CustodialWallet> CustodialWallets => Set<CustodialWallet>();
+    public DbSet<LedgerAccount> LedgerAccounts => Set<LedgerAccount>();
+    public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+    public DbSet<DepositRequest> DepositRequests => Set<DepositRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,5 +60,50 @@ public sealed class StudentEscrowDbContext(DbContextOptions<StudentEscrowDbConte
         kyc.HasIndex(entity => entity.WalletLinkId).IsUnique();
         kyc.HasOne<User>().WithMany().HasForeignKey(entity => entity.UserId).OnDelete(DeleteBehavior.Restrict);
         kyc.HasOne<WalletLink>().WithMany().HasForeignKey(entity => entity.WalletLinkId).OnDelete(DeleteBehavior.Restrict);
+
+        var custodial = modelBuilder.Entity<CustodialWallet>();
+        custodial.ToTable("CustodialWallets");
+        custodial.HasKey(entity => entity.UserId);
+        custodial.Property(entity => entity.Address).HasMaxLength(42).IsRequired();
+        custodial.Property(entity => entity.EncryptedPrivateKey).HasMaxLength(128).IsRequired();
+        custodial.Property(entity => entity.Source).HasMaxLength(16).IsRequired();
+        custodial.HasIndex(entity => entity.Address).IsUnique();
+        custodial.HasOne<User>().WithOne().HasForeignKey<CustodialWallet>(entity => entity.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        var account = modelBuilder.Entity<LedgerAccount>();
+        account.ToTable("LedgerAccounts");
+        account.HasKey(entity => entity.UserId);
+        account.Property(entity => entity.BalanceWei).HasPrecision(38, 0);
+        account.HasOne<User>().WithOne().HasForeignKey<LedgerAccount>(entity => entity.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        var deposit = modelBuilder.Entity<DepositRequest>();
+        deposit.ToTable("DepositRequests");
+        deposit.HasKey(item => item.Id);
+        deposit.Property(item => item.Gateway).HasMaxLength(24).IsRequired();
+        deposit.Property(item => item.Status).HasMaxLength(16).IsRequired();
+        deposit.Property(item => item.GatewayTransactionId).HasMaxLength(64);
+        deposit.Property(item => item.PayoutAddress).HasMaxLength(42);
+        deposit.Property(item => item.PayoutStatus).HasMaxLength(16);
+        deposit.Property(item => item.PayoutTransactionHash).HasMaxLength(66);
+        deposit.HasIndex(item => new { item.UserId, item.Reference }).IsUnique();
+        deposit.HasIndex(item => new { item.UserId, item.CreatedAt });
+        // One payment at the gateway can settle only one request.
+        deposit.HasIndex(item => new { item.Gateway, item.GatewayTransactionId }).IsUnique().HasFilter("[GatewayTransactionId] IS NOT NULL");
+        deposit.HasOne<User>().WithMany().HasForeignKey(item => item.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        var entry = modelBuilder.Entity<LedgerEntry>();
+        entry.ToTable("LedgerEntries");
+        entry.HasKey(item => item.Id);
+        entry.Property(item => item.Type).HasMaxLength(24).IsRequired();
+        entry.Property(item => item.AmountWei).HasPrecision(38, 0);
+        entry.Property(item => item.BalanceAfterWei).HasPrecision(38, 0);
+        entry.Property(item => item.IdempotencyKey).HasMaxLength(256).IsRequired();
+        entry.Property(item => item.OrderId).HasMaxLength(78);
+        entry.Property(item => item.TransactionHash).HasMaxLength(66);
+        entry.Property(item => item.Note).HasMaxLength(200);
+        entry.HasIndex(item => item.IdempotencyKey).IsUnique();
+        entry.HasIndex(item => new { item.UserId, item.CreatedAt });
+        entry.HasIndex(item => new { item.DeploymentId, item.BlockNumber });
+        entry.HasOne<User>().WithMany().HasForeignKey(item => item.UserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

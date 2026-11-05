@@ -9,6 +9,13 @@ public sealed class ExceptionHandler(ILogger<ExceptionHandler> logger) : IExcept
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
+        // The browser cancelled this request because it no longer wants the answer. Nothing failed, and there is nobody left to reply to.
+        if (context.RequestAborted.IsCancellationRequested)
+        {
+            context.Response.StatusCode = 499;
+            return true;
+        }
+
         var error = exception switch
         {
             ApplicationError application => (application.StatusCode, application.Code, application.Message),

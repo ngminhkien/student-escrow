@@ -85,6 +85,173 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                     b.ToTable("KycSubmissions", (string)null);
                 });
 
+            modelBuilder.Entity("StudentEscrow.Domain.Ledger.DepositRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("AmountVnd")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("CreditsLedger")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Gateway")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<string>("GatewayTransactionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("PayoutAddress")
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
+
+                    b.Property<string>("PayoutStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("PayoutTransactionHash")
+                        .HasMaxLength(66)
+                        .HasColumnType("nvarchar(66)");
+
+                    b.Property<Guid>("Reference")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Gateway", "GatewayTransactionId")
+                        .IsUnique()
+                        .HasFilter("[GatewayTransactionId] IS NOT NULL");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("UserId", "Reference")
+                        .IsUnique();
+
+                    b.ToTable("DepositRequests", (string)null);
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Ledger.LedgerAccount", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("BalanceWei")
+                        .HasPrecision(38)
+                        .HasColumnType("decimal(38,0)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("LedgerAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Ledger.LedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountWei")
+                        .HasPrecision(38)
+                        .HasColumnType("decimal(38,0)");
+
+                    b.Property<decimal>("BalanceAfterWei")
+                        .HasPrecision(38)
+                        .HasColumnType("decimal(38,0)");
+
+                    b.Property<long?>("BlockNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("DeploymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(78)
+                        .HasColumnType("nvarchar(78)");
+
+                    b.Property<DateTimeOffset?>("ReversedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("TransactionHash")
+                        .HasMaxLength(66)
+                        .HasColumnType("nvarchar(66)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("DeploymentId", "BlockNumber");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("LedgerEntries", (string)null);
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.ChainArbiter", b =>
+                {
+                    b.Property<Guid>("DeploymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
+
+                    b.Property<bool>("Approved")
+                        .HasColumnType("bit");
+
+                    b.HasKey("DeploymentId", "Address");
+
+                    b.ToTable("ChainArbiter");
+                });
+
             modelBuilder.Entity("StudentEscrow.Domain.Orders.ChainBlock", b =>
                 {
                     b.Property<Guid>("DeploymentId")
@@ -299,6 +466,9 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(42)
                         .HasColumnType("nvarchar(42)");
 
+                    b.Property<DateTimeOffset?>("BuyerAcceptedTermsAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid>("BuyerUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -328,6 +498,11 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(42)
                         .HasColumnType("nvarchar(42)");
+
+                    b.Property<string>("StandardTermsVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("TermsHash")
                         .IsRequired()
@@ -423,12 +598,46 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
 
+                    b.Property<bool>("UsesExternalWallet")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedEmail")
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Wallets.CustodialWallet", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("EncryptedPrivateKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varbinary(128)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("Address")
+                        .IsUnique();
+
+                    b.ToTable("CustodialWallets", (string)null);
                 });
 
             modelBuilder.Entity("StudentEscrow.Domain.Wallets.WalletChallenge", b =>
@@ -488,6 +697,9 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                     b.Property<long>("ChainId")
                         .HasColumnType("bigint");
 
+                    b.Property<bool>("IsCustodial")
+                        .HasColumnType("bit");
+
                     b.Property<DateTimeOffset>("LinkedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -520,6 +732,33 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("StudentEscrow.Domain.Ledger.DepositRequest", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Ledger.LedgerAccount", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Users.User", null)
+                        .WithOne()
+                        .HasForeignKey("StudentEscrow.Domain.Ledger.LedgerAccount", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Ledger.LedgerEntry", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("StudentEscrow.Domain.Orders.OrderDraft", b =>
                 {
                     b.HasOne("StudentEscrow.Domain.Users.User", null)
@@ -540,6 +779,15 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                     b.HasOne("StudentEscrow.Domain.Orders.OrderDraft", null)
                         .WithMany()
                         .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Wallets.CustodialWallet", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Users.User", null)
+                        .WithOne()
+                        .HasForeignKey("StudentEscrow.Domain.Wallets.CustodialWallet", "UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -26,7 +26,7 @@ export function useOrderEligibility(draft: Draft, network: NetworkStatus, applic
     }
     void refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [key, network.status, network.deploymentId, applicable, revision]);
+  }, [key, network.status, network.deploymentId, network.lastIndexedBlock, applicable, revision]);
   const current = result?.key === key ? result : null;
   return { buyer: current?.buyer ?? null, seller: current?.seller ?? null, error: current?.error ?? "",
     ready: !!current && !current.error && current.buyer && current.seller,

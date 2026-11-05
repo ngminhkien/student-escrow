@@ -14,7 +14,8 @@ try {
   const deployedBlock = await ethers.provider.getBlock(manifest.deploymentBlock);
   assert.equal(deployedBlock?.hash, manifest.deploymentBlockHash, "Local chain reset: deploy again before smoke.");
   assert.notEqual(await ethers.provider.getCode(manifest.contractAddress), "0x", "Contract is absent: deploy again.");
-  const [admin, buyer, seller, arbiter, platform] = await ethers.getSigners();
+  const [admin, buyer, seller, arbiter] = await ethers.getSigners();
+  const platform = admin;
   for (const [role, signer] of Object.entries({ admin, buyer, seller, arbiter, platform })) assert.equal(manifest.roles[role], signer.address);
   const escrow: any = await ethers.getContractAt("Escrow", manifest.contractAddress, admin);
   assert.equal(await escrow.platformWallet(), platform.address);
@@ -22,7 +23,8 @@ try {
   const balance = async (address: string) => BigInt(await provider.request({ method: "eth_getBalance", params: [address, "latest"] }) as string);
   const initialLocked = await escrow.totalLockedWei();
   for (const wallet of [buyer.address, seller.address]) await (await escrow.setWalletVerified(wallet, true)).wait();
-  console.log("PASS Admin on-chain verification of Buyer and Seller");
+  await (await escrow.setArbiterApproved(arbiter.address, true)).wait();
+  console.log("PASS Admin on-chain verification of Buyer and Seller, and Arbiter approval");
   const value = parseEther("0.01");
   const runId = randomUUID();
   for (const scenario of ["complete", "split", "refund", "review-timeout"] as const) {
@@ -31,6 +33,7 @@ try {
     const created = await (await escrow.connect(buyer).createOrder(seller.address, arbiter.address, value, id(`${runId}-${scenario}`), sha256(toUtf8Bytes("demo agreed terms")), now + 3600, 300)).wait();
     assert.equal(created.status, 1);
     assert.equal((await escrow.getOrder(orderId)).state, 0n);
+    await (await escrow.connect(seller).acceptOrder(orderId)).wait();
     await (await escrow.connect(buyer).deposit(orderId, { value })).wait();
     assert.equal(await escrow.totalLockedWei(), initialLocked + value);
     const buyerBefore = await balance(buyer.address), sellerBefore = await balance(seller.address), feeBefore = await balance(platform.address);

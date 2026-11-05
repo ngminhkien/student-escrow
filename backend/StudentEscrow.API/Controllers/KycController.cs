@@ -9,6 +9,8 @@ namespace StudentEscrow.API.Controllers;
 [EnableRateLimiting("wallet-kyc")]
 public sealed class KycController(IKycService kyc) : AuthenticatedController
 {
+    // Reads run after every action and on a timer, so they cannot share the strict limit meant for writes.
+    [EnableRateLimiting("orders")]
     [HttpGet("me")]
     public async Task<ActionResult<KycResponse>> Me(CancellationToken cancellationToken) =>
         Ok(await kyc.GetAsync(CurrentUserId, cancellationToken));

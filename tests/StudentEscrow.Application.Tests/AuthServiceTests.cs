@@ -1,5 +1,6 @@
 using StudentEscrow.Application.Auth;
 using StudentEscrow.Application.Common;
+using StudentEscrow.Application.Wallets;
 using StudentEscrow.Domain.Users;
 using StudentEscrow.Infrastructure.Auth;
 using Xunit;
@@ -10,12 +11,45 @@ public sealed class AuthServiceTests
 {
     private readonly MemoryUserRepository users = new();
     private readonly PasswordService passwords = new();
+    private readonly RecordingProvisioner provisioner = new();
     private readonly JwtSettings settings = new()
     {
         SigningKey = "test-only-key-which-is-long-enough-for-hmac-sha256"
     };
 
-    private AuthService CreateService() => new(users, passwords, new TokenService(settings, TimeProvider.System), TimeProvider.System);
+    private AuthService CreateService() => new(users, passwords, new TokenService(settings, TimeProvider.System), TimeProvider.System, provisioner);
+
+    private sealed class RecordingProvisioner : IWalletProvisioner
+    {
+        public List<Guid> Users { get; } = [];
+        public Task EnsureAsync(Guid userId, CancellationToken cancellationToken)
+        {
+            Users.Add(userId);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task RegistrationCreatesAWalletUnlessTheUserBringsTheirOwn()
+    {
+        var service = CreateService();
+        var created = await service.RegisterAsync(new RegisterRequest("custodial@example.com", "Custodial", "DemoPassword123!"), default);
+        Assert.Equal([created.User.Id], provisioner.Users);
+
+        await service.RegisterAsync(new RegisterRequest("external@example.com", "External", "DemoPassword123!") { UseExternalWallet = true }, default);
+        await service.LoginAsync(new LoginRequest("external@example.com", "DemoPassword123!"), default);
+        Assert.Equal([created.User.Id], provisioner.Users);
+    }
+
+    [Fact]
+    public async Task LoginRepairsAMissingWallet()
+    {
+        var service = CreateService();
+        var created = await service.RegisterAsync(new RegisterRequest("repair@example.com", "Repair", "DemoPassword123!"), default);
+        provisioner.Users.Clear();
+        await service.LoginAsync(new LoginRequest("repair@example.com", "DemoPassword123!"), default);
+        Assert.Equal([created.User.Id], provisioner.Users);
+    }
 
     [Fact]
     public async Task RegistrationHashesPasswordAndNormalizesEmail()

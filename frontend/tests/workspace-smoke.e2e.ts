@@ -13,6 +13,7 @@ for (const width of [375, 1440]) test(`mocked workspace navigation and local pag
     else if (url.pathname.endsWith("/wallets/me")) json = { linked: true, address: "0x1111111111111111111111111111111111111111", chainId: 31337 };
     else if (url.pathname.endsWith("/kyc/me")) json = { status: "NOT_SUBMITTED", isMock: true };
     else if (url.pathname.endsWith("/auth/login")) json = session;
+    else if (url.pathname.endsWith("/wallets/deposits")) json = [];
     else if (url.pathname.endsWith("/orders")) { const skip = url.searchParams.get("skip") ?? "0"; offsets.push(skip); json = skip === "0" ? Array.from({ length: 50 }, (_, i) => order(i + 1)) : [order(51)]; }
     await route.fulfill({ json });
   });
@@ -74,8 +75,8 @@ test("mocked download refuses bytes that disagree with recorded SHA-256", async 
     const { default: { createRoot } } = await import(/* @vite-ignore */ domPath);
     const { default: Files } = await import(/* @vite-ignore */ filesPath);
     const host = document.createElement("div"); host.id = "file-harness"; document.body.append(host);
-    const view = { draft: { id: "file-order", deploymentId: "old" }, chain: null, syncStatus: "Stale", termsMatch: false, files: [{ id: "file-id", kind: "product", fileName: "safe.zip", length: 7, sha256: "0x" + "0".repeat(64) }] };
-    createRoot(host).render(React.createElement(Files, { session: value, account: "", canSign: false, network: { status: "Unavailable" }, chainTime: 0, busy: false, view, onRefresh() {}, onHashMismatch() {}, run: async (_: string, action: () => Promise<void>) => { try { await action(); } catch (error) { const alert = document.createElement("p"); alert.role = "alert"; alert.textContent = String(error); host.append(alert); } } }));
+    const view = { draft: { id: "file-order", deploymentId: "old", seller: "0xseller" }, chain: null, syncStatus: "Stale", termsMatch: false, files: [{ id: "file-id", kind: "product", fileName: "safe.zip", length: 7, sha256: "0x" + "0".repeat(64) }] };
+    createRoot(host).render(React.createElement(Files, { session: value, account: "0xseller", canSign: false, network: { status: "Unavailable" }, chainTime: 0, busy: false, view, onRefresh() {}, onHashMismatch() {}, run: async (_: string, action: () => Promise<void>) => { try { await action(); } catch (error) { const alert = document.createElement("p"); alert.role = "alert"; alert.textContent = String(error); host.append(alert); } } }));
   }, session);
   await page.getByRole("button", { name: "Tải safe.zip", exact: true }).click();
   await expect(page.locator("#file-harness [role=alert]")).toContainText("hash file tải xuống không khớp");

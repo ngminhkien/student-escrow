@@ -15,6 +15,10 @@ public sealed class SqlFactAttribute : FactAttribute
     }
 }
 
+[CollectionDefinition("Sql", DisableParallelization = true)]
+public sealed class SqlCollection;
+
+[Collection("Sql")]
 public sealed class EscrowSqlTests
 {
     private static StudentEscrowDbContext Database() => new(new DbContextOptionsBuilder<StudentEscrowDbContext>()
@@ -39,38 +43,59 @@ public sealed class EscrowSqlTests
             Assert.Equal(checkpoint, (await db.Set<ChainDeployment>().FindAsync(manifest.DeploymentId))!.LastBlock);
         }
         chain.Add(Fixtures.Created(1, Fixtures.Hash(1)));
-        chain.Add(Fixtures.Deposited(2, Fixtures.Hash(2)));
+        chain.Add(Fixtures.Accepted(2, Fixtures.Hash(2)));
+        chain.Add(Fixtures.Deposited(3, Fixtures.Hash(3)));
         await Sync();
-        await AssertState("Funded", 2, 2);
+        await AssertState("Funded", 3, 3);
         await Sync(); // New DbContext simulates process restart; no duplicate journal entries.
-        await AssertState("Funded", 2, 2);
-        chain.Add(Fixtures.Delivered(3, Fixtures.Hash(3)));
-        chain.Add(Fixtures.Released(4, Fixtures.Hash(4)));
+        await AssertState("Funded", 3, 3);
+        chain.Add(Fixtures.Delivered(4, Fixtures.Hash(4)));
+        chain.Add(Fixtures.Released(5, Fixtures.Hash(5)));
         await Sync();
-        await AssertState("Completed", 4, 4);
+        await AssertState("Completed", 5, 5);
+        chain.Logs.Remove(5);
         chain.Logs.Remove(4);
-        chain.Logs.Remove(3);
-        chain.Add(Fixtures.Refunded(3, Fixtures.Hash(30)));
+        chain.Add(Fixtures.Refunded(4, Fixtures.Hash(30)));
         await Sync();
-        await AssertState("Refunded", 3, 3);
+        await AssertState("Refunded", 4, 4);
         await using (var db = Database())
             Assert.DoesNotContain(await db.Set<ChainEvent>().Where(e => e.DeploymentId == manifest.DeploymentId).ToListAsync(), e => e.Name == "Released");
-        chain.Logs.Remove(3);
+        chain.Logs.Remove(4);
         await Sync(); // Shorter chain: unwind refund to Funded.
-        await AssertState("Funded", 2, 2);
-        chain.Add(Fixtures.Delivered(3, Fixtures.Hash(31)));
+        await AssertState("Funded", 3, 3);
+        chain.Add(Fixtures.Delivered(4, Fixtures.Hash(31)));
         chain.FailLogs = true;
         await Assert.ThrowsAsync<IOException>(() => Sync());
-        await AssertState("Funded", 2, 2); // Failed batch never advances checkpoint.
+        await AssertState("Funded", 3, 3); // Failed batch never advances checkpoint.
         chain.FailLogs = false;
         await Sync();
-        await AssertState("Delivered", 3, 3);
+        await AssertState("Delivered", 4, 4);
         await Sync(manifest with { DeploymentId = Guid.NewGuid() }); // Reused numeric order ID stays isolated.
-        await AssertState("Delivered", 3, 3);
+        await AssertState("Delivered", 4, 4);
         chain.Valid = false;
         await Sync();
         await using (var db = Database())
             Assert.Equal("InvalidDeployment", (await db.Set<ChainDeployment>().FindAsync(manifest.DeploymentId))!.Status);
+    }
+
+    [SqlFact]
+    public async Task ArbiterListFollowsTheChainThroughRemovalAndReorg()
+    {
+        var chain = new FakeChain();
+        var manifest = new DeploymentManifest(Guid.NewGuid(), "31337", Fixtures.Contract, 1, Fixtures.Hash(1), Fixtures.Hash(101));
+        async Task<bool?> Sync()
+        {
+            await using var db = Database();
+            await new BlockchainSync(db, chain, new BlockchainSettings { BatchSize = 50 }, TimeProvider.System).SyncAsync(manifest, default);
+            return (await db.Set<ChainArbiter>().AsNoTracking().SingleOrDefaultAsync(a => a.DeploymentId == manifest.DeploymentId))?.Approved;
+        }
+        chain.Add(Fixtures.ArbiterApproval(1, Fixtures.Hash(1), true));
+        Assert.True(await Sync());
+        chain.Add(Fixtures.ArbiterApproval(2, Fixtures.Hash(2), false));
+        Assert.False(await Sync());
+        chain.Logs.Remove(2);
+        chain.Add(Fixtures.Created(2, Fixtures.Hash(20))); // The removal was reorged out, so the approval stands again.
+        Assert.True(await Sync());
     }
 
     [SqlFact]
@@ -99,7 +124,7 @@ public sealed class EscrowSqlTests
         Assert.Equal(1, (await db.Set<ChainDeployment>().FindAsync(manifest.DeploymentId))!.LastBlock);
     }
 
-    private sealed class FakeChain : IBlockchainSource
+    internal sealed class FakeChain : IBlockchainSource
     {
         public Dictionary<long, RpcLog> Logs { get; } = [];
         public bool FailLogs { get; set; }

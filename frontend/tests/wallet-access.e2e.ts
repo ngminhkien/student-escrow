@@ -28,7 +28,7 @@ for (const admin of [false, true]) for (const failure of ["wrong", "disconnected
       const path = new URL(route.request().url()).pathname;
       return route.fulfill({ json: path.endsWith("/wallets/me") ? { linked: true, address, chainId: 31337 }
         : path.endsWith("/kyc/me") ? { status: "NOT_SUBMITTED", isMock: true }
-        : path.endsWith("/orders") ? [] : { status: "Ready", deploymentId: "test-deploy", contractAddress: "0x4444444444444444444444444444444444444444" } });
+        : path.endsWith("/orders") || path.endsWith("/wallets/deposits") ? [] : { status: "Ready", deploymentId: "test-deploy", contractAddress: "0x4444444444444444444444444444444444444444" } });
     });
     await page.route("**/rpc", route => {
       const input = route.request().postDataJSON();

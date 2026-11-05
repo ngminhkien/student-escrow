@@ -52,6 +52,11 @@
         "resolved": "10.2.3",
         "contentHash": "nthWONRs/FJ4yyG206g1cC52WEG8EqrjuMWjGdR+5XG7lbjFto6NqcI9EMICgVFom/UivIjUVwI76ZHbHwTPfQ=="
       },
+      "ADRaffy.ENSNormalize": {
+        "type": "Transitive",
+        "resolved": "0.3.1",
+        "contentHash": "iv/gGQYoEr0BjT6sB/q9yDyktA+h6JW3fInVJwey89kd3tn/CSYWhhTrS8G20wwcyNtln/DA4Te4W0SC+/GHGw=="
+      },
       "Azure.Core": {
         "type": "Transitive",
         "resolved": "1.47.1",
@@ -283,6 +288,11 @@
           "Microsoft.IdentityModel.Logging": "8.19.2"
         }
       },
+      "Microsoft.NETCore.Platforms": {
+        "type": "Transitive",
+        "resolved": "1.1.0",
+        "contentHash": "kz0PEW2lhqygehI/d6XsPCQzD7ff7gUJaVGPVETX611eadGsA3A877GdSlU0LRVMCTH/+P3o2iDTak+S08V2+A=="
+      },
       "Microsoft.OpenApi": {
         "type": "Transitive",
         "resolved": "2.7.5",
@@ -306,6 +316,14 @@
           "System.CodeDom": "6.0.0"
         }
       },
+      "NBitcoin": {
+        "type": "Transitive",
+        "resolved": "7.0.6",
+        "contentHash": "qRN2ajVUlGo85q1XMCrnTH/48UkV64g6HDGPGekD7obuBxmSIvq7fb79b9oW2xt1o9LMBlpaGST1gDRKWbQ3Ow==",
+        "dependencies": {
+          "Newtonsoft.Json": "11.0.2"
+        }
+      },
       "NBitcoin.Secp256k1": {
         "type": "Transitive",
         "resolved": "3.1.1",
@@ -318,6 +336,56 @@
         "dependencies": {
           "Nethereum.Hex": "6.1.0",
           "Nethereum.Util": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.Accounts": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "IVRoNyXBLpVvsCbpBmAg7Srnp2Vwvah1EmHwbG5Ig4JiPrtwBFAusmJVQKsDBcaNjUoHRIzrAJ3Wpj7MUbqnmA==",
+        "dependencies": {
+          "Nethereum.KeyStore": "6.1.0",
+          "Nethereum.RPC": "6.1.0",
+          "Nethereum.Signer": "6.1.0",
+          "Nethereum.Signer.EIP712": "6.1.0",
+          "Nethereum.Util": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.BlockchainProcessing": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "l5DbXmYc2Xi2wKFS+dBXJ4+Hj/XJD4FO8zAxUhQbx/cFv+Zble157MpixoXMswAHZSF1oqPgd9Mh+/jcamZoDw==",
+        "dependencies": {
+          "Nethereum.Contracts": "6.1.0",
+          "Nethereum.Hex": "6.1.0",
+          "Nethereum.JsonRpc.RpcClient": "6.1.0",
+          "Nethereum.RPC": "6.1.0",
+          "Nethereum.Util": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.Contracts": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "zGFRLRLDpvjFbHNHiLGNPaKJOmVMMXBR8xJFRvxI4oVQU5gzYAtF4mlKRPN2pSLD7+4qG6dTP/GiaxvC8hWblg==",
+        "dependencies": {
+          "ADRaffy.ENSNormalize": "0.3.1",
+          "Nethereum.ABI": "6.1.0",
+          "Nethereum.Hex": "6.1.0",
+          "Nethereum.RPC": "6.1.0",
+          "Nethereum.Util.Rest": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.HdWallet": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "76zBjbgftWLE/a/gTG0vx3t4yiAFy/fBvzed8B1M9vEpewz9HUYM6lLncXrfjbYWZiZCHFKBoKk0PGcnHRq9yw==",
+        "dependencies": {
+          "NBitcoin": "7.0.6",
+          "NETStandard.Library": "2.0.3",
+          "Nethereum.Web3": "6.1.0",
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
         }
       },
@@ -347,6 +415,26 @@
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
         }
       },
+      "Nethereum.KeyStore": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "lJMrRM7iR2Anj4TbmPNq0lNsSAA9XpyJmQ7GjSuqFt9gftDJa+AGITvjVHSi4c8CmKyHoGlSU5KbKgX25oBRVw==",
+        "dependencies": {
+          "BouncyCastle.Cryptography": "[2.5.1, 3.0.0)",
+          "Nethereum.Hex": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.Merkle.Patricia": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "u4o4XXZL0YXfrilrL42l39Fs45KsicT6/as11mOCPJLV9fkGWwbsJCYiAxcg9UMRo8wrEgslkfogWKSl2BaucQ==",
+        "dependencies": {
+          "Nethereum.Model": "6.1.0",
+          "Nethereum.RLP": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
       "Nethereum.Model": {
         "type": "Transitive",
         "resolved": "6.1.0",
@@ -366,6 +454,19 @@
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
         }
       },
+      "Nethereum.RPC": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "Pd/h5RviEAORJvuvaBXBqKM6Hy8MDFXvAvIH1r7mDvMD6p50YzpBRjvmU7rMKmNrYHQLQpi2QnGbkZPwja7GPA==",
+        "dependencies": {
+          "Nethereum.Hex": "6.1.0",
+          "Nethereum.JsonRpc.Client": "6.1.0",
+          "Nethereum.Merkle.Patricia": "6.1.0",
+          "Nethereum.Model": "6.1.0",
+          "Nethereum.Util": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
       "Nethereum.Signer": {
         "type": "Transitive",
         "resolved": "6.1.0",
@@ -381,6 +482,18 @@
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
         }
       },
+      "Nethereum.Signer.EIP712": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "etF0aMe5Bw/bHG8ZwkLwP1fS/iMqut/96MHwrfj5v9iU+E6KajimMKaRCeslrX3I6AYlETxddUZ8+mQdXBdduQ==",
+        "dependencies": {
+          "Nethereum.ABI": "6.1.0",
+          "Nethereum.Hex": "6.1.0",
+          "Nethereum.Signer": "6.1.0",
+          "Nethereum.Util": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
       "Nethereum.Util": {
         "type": "Transitive",
         "resolved": "6.1.0",
@@ -389,6 +502,40 @@
           "Nethereum.Hex": "6.1.0",
           "Nethereum.RLP": "6.1.0",
           "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.Util.Rest": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "1p5eie37Mput3Qp2NShL51mXv5Sh+hSBg31U794RLZyw6ujc7aPkW64wngJSBBor2i/Kz7OKW35aVfXl+3hlFA==",
+        "dependencies": {
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "Nethereum.Web3": {
+        "type": "Transitive",
+        "resolved": "6.1.0",
+        "contentHash": "8blktadzboAcAuHVkj4plCyaKFHSQdXb14TmU+c7DA8zSa234eC5yDDMm57tvhPlaDEnlv+t2Y6KyUv+0d9Y+A==",
+        "dependencies": {
+          "Nethereum.ABI": "6.1.0",
+          "Nethereum.Accounts": "6.1.0",
+          "Nethereum.BlockchainProcessing": "6.1.0",
+          "Nethereum.Contracts": "6.1.0",
+          "Nethereum.Hex": "6.1.0",
+          "Nethereum.JsonRpc.RpcClient": "6.1.0",
+          "Nethereum.KeyStore": "6.1.0",
+          "Nethereum.RPC": "6.1.0",
+          "Nethereum.Signer": "6.1.0",
+          "Nethereum.Util": "6.1.0",
+          "Newtonsoft.Json": "[11.0.2, 14.0.0)"
+        }
+      },
+      "NETStandard.Library": {
+        "type": "Transitive",
+        "resolved": "2.0.3",
+        "contentHash": "st47PosZSHrjECdjeIzZQbzivYBJFv6P2nv4cj2ypdI204DO+vZ7l5raGMiX4eXMJ53RfOIg+/s4DHVZ54Nu2A==",
+        "dependencies": {
+          "Microsoft.NETCore.Platforms": "1.1.0"
         }
       },
       "Newtonsoft.Json": {
@@ -481,8 +628,8 @@
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
-        "resolved": "9.0.4",
-        "contentHash": "cUFTcMlz/Qw9s90b2wnWSCvHdjv51Bau9FQqhsr4TlwSe1OX+7SoXUqphis5G74MLOvMOCghxPPlEqOdCrVVGA=="
+        "resolved": "10.0.14",
+        "contentHash": "Wz+IgL2xpg8KJ4i2VWj6uz1PmZNu4Q0Ljlwd73P9Vze5NcOBtctLii3itV0PB2MpOqwqDEGfB6RCdv94A4E5yQ=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
@@ -503,11 +650,13 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.6.2, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Nethereum.HDWallet": "[6.1.0, )",
           "Nethereum.JsonRpc.RpcClient": "[6.1.0, )",
           "Nethereum.Signer": "[6.1.0, )",
           "Newtonsoft.Json": "[13.0.4, )",
           "StudentEscrow.Application": "[1.0.0, )",
-          "System.IdentityModel.Tokens.Jwt": "[8.19.2, )"
+          "System.IdentityModel.Tokens.Jwt": "[8.19.2, )",
+          "System.Security.Cryptography.Pkcs": "[10.0.14, )"
         }
       }
     }

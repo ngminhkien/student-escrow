@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using StudentEscrow.Application.Common;
+using StudentEscrow.Application.Wallets;
 using StudentEscrow.Domain.Users;
 
 namespace StudentEscrow.Application.Auth;
@@ -8,7 +9,8 @@ public sealed class AuthService(
     IUserRepository users,
     IPasswordService passwords,
     ITokenService tokens,
-    TimeProvider timeProvider) : IAuthService
+    TimeProvider timeProvider,
+    IWalletProvisioner wallets) : IAuthService
 {
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken)
     {
@@ -25,8 +27,13 @@ public sealed class AuthService(
             throw new ApplicationError("EMAIL_ALREADY_EXISTS", "Email đã được đăng ký.", 409);
         }
 
-        var user = new User(Guid.NewGuid(), email, fullName, passwords.Hash(request.Password), timeProvider.GetUtcNow());
+        var user = new User(Guid.NewGuid(), email, fullName, passwords.Hash(request.Password), timeProvider.GetUtcNow(), request.UseExternalWallet);
         await users.AddAsync(user, cancellationToken);
+        if (!user.UsesExternalWallet)
+        {
+            await wallets.EnsureAsync(user.Id, cancellationToken);
+        }
+
         return tokens.Issue(user);
     }
 
@@ -38,6 +45,12 @@ public sealed class AuthService(
         if (user is null || !passwordMatches)
         {
             throw new ApplicationError("INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng.", 401);
+        }
+
+        // Repairs an account whose wallet creation failed after its registration was saved.
+        if (!user.UsesExternalWallet)
+        {
+            await wallets.EnsureAsync(user.Id, cancellationToken);
         }
 
         return tokens.Issue(user);

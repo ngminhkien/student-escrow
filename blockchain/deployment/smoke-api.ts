@@ -32,7 +32,7 @@ try {
   for (const role of ["buyer", "seller", "arbiter", "outsider"]) {
     const wallet = Wallet.createRandom().connect(ethers.provider);
     const auth = await request("/api/auth/register", undefined, "POST", {
-      email: `orders.${run}.${role}@example.test`, fullName: `Escrow ${role}`, password: "DemoPassword123!" }, 201);
+      email: `orders.${run}.${role}@example.test`, fullName: `Escrow ${role}`, password: "DemoPassword123!", useExternalWallet: true }, 201);
     const challenge = await request("/api/wallets/challenges", auth.accessToken, "POST", { address: wallet.address, chainId: 31337 });
     await request("/api/wallets/link", auth.accessToken, "POST", { challengeId: challenge.challengeId, signature: await wallet.signMessage(challenge.message) });
     actors.push({ wallet, signer: new NonceManager(wallet), token: auth.accessToken });
@@ -40,9 +40,24 @@ try {
   const [buyer, seller, arbiter, outsider] = actors;
   for (const actor of [buyer, seller, arbiter]) await (await admin.sendTransaction({ to: actor.wallet.address, value: parseEther("1") })).wait();
   for (const actor of [buyer, seller]) await (await escrow.setWalletVerified(actor.wallet.address, true)).wait();
+  const sellerEmail = `orders.${run}.seller@example.test`;
+  const terms = await request("/api/orders/terms", buyer.token);
+  const parties = { sellerEmail, arbiter: arbiter.wallet.address, acceptedTermsVersion: terms.version };
   const amount = parseEther("0.01");
   const now = (await ethers.provider.getBlock("latest"))!.timestamp;
-  const draftView = await request("/api/orders", buyer.token, "POST", { seller: seller.wallet.address, arbiter: arbiter.wallet.address,
+  const validDeadline = Math.max(now, Math.floor(Date.now() / 1000)) + 3600;
+  const draftBody = { ...parties, description: "Rejected", acceptanceCriteria: "Works", amountWei: amount.toString(), deliveryDeadline: validDeadline, reviewWindow: 300 };
+  const found = await request("/api/orders/party-lookup", buyer.token, "POST", { email: sellerEmail });
+  assert.equal(found.address, seller.wallet.address);
+  assert.ok(!found.maskedEmail.includes(sellerEmail), "The other party's full email must stay private");
+  await request("/api/orders/party-lookup", buyer.token, "POST", { email: "nobody@example.test" }, 404);
+  await request("/api/orders/party-lookup", undefined, "POST", { email: sellerEmail }, 401);
+  await request("/api/orders", buyer.token, "POST", { ...draftBody, acceptedTermsVersion: "old" }, 400);
+  assert.equal((await request("/api/orders", buyer.token, "POST", draftBody, 400)).code, "ARBITER_NOT_APPROVED");
+  await (await escrow.setArbiterApproved(arbiter.wallet.address, true)).wait();
+  for (let i = 0; i < 40 && !(await request("/api/orders/arbiters", buyer.token)).some((item: any) => item.address === arbiter.wallet.address); i++) await new Promise(resolve => setTimeout(resolve, 500));
+  assert.ok((await request("/api/orders/arbiters", buyer.token)).some((item: any) => item.address === arbiter.wallet.address));
+  const draftView = await request("/api/orders", buyer.token, "POST", { ...parties,
     description: "Landing page demo", acceptanceCriteria: "Works at 375px and 1440px", amountWei: amount.toString(),
     deliveryDeadline: Math.max(now, Math.floor(Date.now() / 1000)) + 3600, reviewWindow: 300 }, 201);
   const draft = draftView.draft;
@@ -64,6 +79,10 @@ try {
   const created = await waitState("Created");
   assert.equal(created.termsMatch, true);
   const orderId = created.chain.orderId;
+  assert.equal(created.parties.seller.fullName, "Escrow seller");
+  await assert.rejects(escrow.connect(buyer.signer).deposit.staticCall(orderId, { value: amount }));
+  await (await escrow.connect(seller.signer).acceptOrder(orderId)).wait();
+  await waitState("Accepted");
   await (await escrow.connect(buyer.signer).deposit(orderId, { value: amount })).wait();
   await waitState("Funded");
   // Fixture is a real, nonempty ZIP containing index.html. No ZIP execution or extraction.
@@ -79,11 +98,14 @@ try {
   const product = await upload(seller.token, "product", "demo.zip", zip);
   assert.equal(product.sha256, sha256(zip));
   await upload(seller.token, "product", "replace.zip", zip, 409);
-  for (const actor of [buyer, seller, arbiter]) {
+  async function assertProductReadable(actor: { token: string }) {
     const response = await fetch(`${base}${path}/files/${product.id}`, { headers: { Authorization: `Bearer ${actor.token}` } });
     assert.equal(response.status, 200); assert.match(response.headers.get("content-disposition")!, /^attachment/);
     assert.equal(sha256(new Uint8Array(await response.arrayBuffer())), product.sha256);
   }
+  await assertProductReadable(seller);
+  // Before delivery on chain only the Seller may read the product.
+  for (const actor of [buyer, arbiter]) await request(`${path}/files/${product.id}`, actor.token, "GET", undefined, 403);
   await request(`${path}/files/${product.id}`, outsider.token, "GET", undefined, 404);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1cAAAAASUVORK5CYII=", "base64");
   await upload(buyer.token, "evidence", "oversize.png", new Uint8Array(5_000_001), 413);
@@ -97,35 +119,37 @@ try {
   const snapshot = await provider.request({ method: "evm_snapshot", params: [] });
   await (await escrow.connect(seller.signer).markDelivered(orderId, product.sha256)).wait();
   assert.equal((await waitState("Delivered")).deliveryFileMatchesChain, true);
+  for (const actor of [buyer, seller, arbiter]) await assertProductReadable(actor);
   await (await escrow.connect(buyer.signer).confirmReceipt(orderId)).wait();
   const complete = await waitState("Completed");
   assert.equal(complete.chain.sellerNetWei, "9900000000000000");
   assert.equal(complete.chain.platformFeeWei, "100000000000000");
   const history = await request(`${path}/events`, buyer.token);
-  assert.deepEqual(history.map((e: any) => e.name), ["OrderCreated", "Deposited", "Delivered", "Released"]);
+  assert.deepEqual(history.map((e: any) => e.name), ["OrderCreated", "OrderAccepted", "Deposited", "Delivered", "Released"]);
   await new Promise(resolve => setTimeout(resolve, 3000));
-  assert.equal((await request(`${path}/events`, buyer.token)).length, 4);
+  assert.equal((await request(`${path}/events`, buyer.token)).length, 5);
   console.log("PASS API → contract → worker → SQL → API, Completed and event dedup");
   assert.equal(await provider.request({ method: "evm_revert", params: [snapshot] }), true);
   const rolledBack = await waitState("Funded");
   assert.equal(rolledBack.chain.deliveryHash, null);
   assert.equal(rolledBack.deliveryFileMatchesChain, false);
-  assert.equal((await request(`${path}/events`, buyer.token)).length, 2);
+  assert.equal((await request(`${path}/events`, buyer.token)).length, 3);
   buyer.signer.reset(); seller.signer.reset();
   await provider.request({ method: "evm_setNextBlockTimestamp", params: [draft.deliveryDeadline + 1] });
   await (await escrow.connect(buyer.signer).refundIfExpired(orderId)).wait();
   const refunded = await waitState("Refunded");
   assert.equal(refunded.chain.buyerRefundWei, amount.toString());
-  assert.deepEqual((await request(`${path}/events`, buyer.token)).map((e: any) => e.name), ["OrderCreated", "Deposited", "Refunded"]);
+  assert.deepEqual((await request(`${path}/events`, buyer.token)).map((e: any) => e.name), ["OrderCreated", "OrderAccepted", "Deposited", "Refunded"]);
   await upload(seller.token, "evidence", "late.png", png, 409);
   console.log("PASS local reorg removes orphan events, rebuilds state and indexes replacement refund");
   const disputeDraft = (await request("/api/orders", buyer.token, "POST", {
-    seller: seller.wallet.address, arbiter: arbiter.wallet.address, description: "Dispute demo", acceptanceCriteria: "Agreed scope",
+    ...parties, description: "Dispute demo", acceptanceCriteria: "Agreed scope",
     amountWei: amount.toString(), deliveryDeadline: (await ethers.provider.getBlock("latest"))!.timestamp + 3600, reviewWindow: 300 }, 201)).draft;
   const disputePath = `/api/orders/${disputeDraft.id}`;
   await (await escrow.connect(buyer.signer).createOrder(seller.wallet.address, arbiter.wallet.address, amount,
     disputeDraft.clientReference, disputeDraft.termsHash, disputeDraft.deliveryDeadline, disputeDraft.reviewWindow)).wait();
   const disputeId = (await waitState("Created", disputePath)).chain.orderId;
+  await (await escrow.connect(seller.signer).acceptOrder(disputeId)).wait();
   await (await escrow.connect(buyer.signer).deposit(disputeId, { value: amount })).wait();
   await (await escrow.connect(buyer.signer).raiseDispute(disputeId)).wait();
   await waitState("Disputed", disputePath);
@@ -135,7 +159,7 @@ try {
   assert.equal(resolved.chain.sellerNetWei, "6930000000000000");
   assert.equal(resolved.chain.platformFeeWei, "70000000000000");
   const mismatchDraft = (await request("/api/orders", buyer.token, "POST", {
-    seller: seller.wallet.address, arbiter: arbiter.wallet.address, description: "Mismatch demo", acceptanceCriteria: "Agreed scope",
+    ...parties, description: "Mismatch demo", acceptanceCriteria: "Agreed scope",
     amountWei: amount.toString(), deliveryDeadline: (await ethers.provider.getBlock("latest"))!.timestamp + 3600, reviewWindow: 300 }, 201)).draft;
   await (await escrow.connect(buyer.signer).createOrder(seller.wallet.address, arbiter.wallet.address, amount + 1n,
     mismatchDraft.clientReference, mismatchDraft.termsHash, mismatchDraft.deliveryDeadline, mismatchDraft.reviewWindow)).wait();

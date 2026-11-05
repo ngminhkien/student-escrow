@@ -13,6 +13,8 @@ using StudentEscrow.Application.Kyc;
 using StudentEscrow.Application.Wallets;
 using Xunit;
 
+using StudentEscrow.Infrastructure.Payments;
+
 namespace StudentEscrow.Application.Tests;
 
 public sealed class WalletKycHttpTests
@@ -81,6 +83,41 @@ public sealed class WalletKycHttpTests
         return (await response.Content.ReadFromJsonAsync<AuthResponse>())!.AccessToken;
     }
 
+    [Fact]
+    public async Task RefreshingTheAccountPageDoesNotUseUpTheWriteLimit()
+    {
+        await using var factory = new TestApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await Register(client, "reader@example.test"));
+        // More reads than the 30 per minute that wallet and KYC writes are allowed.
+        for (var index = 0; index < 40; index++)
+        {
+            using var read = await client.GetAsync("/api/kyc/me");
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, read.StatusCode);
+        }
+        using var write = await client.PostAsJsonAsync("/api/wallets/link", new { challengeId = Guid.NewGuid(), signature = "invalid" });
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, write.StatusCode);
+    }
+
+    [Fact]
+    public async Task DepositEndpointsNeedASessionAndTheWebhookNeedsAValidSignature()
+    {
+        await using var factory = new TestApiFactory();
+        using var client = factory.CreateClient();
+        var id = Guid.NewGuid();
+        using var list = await client.GetAsync("/api/wallets/deposits");
+        Assert.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
+        using var pay = await client.PostAsJsonAsync($"/api/wallets/deposits/{id}/mock-payment", new { outcome = "Succeeded" });
+        Assert.Equal(HttpStatusCode.Unauthorized, pay.StatusCode);
+
+        var body = new { depositId = id, amountVnd = 100000, status = "Succeeded", gatewayTransactionId = "TX-1", timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), signature = new string('0', 64) };
+        using var forged = await client.PostAsJsonAsync("/api/payments/webhook", body);
+        Assert.Equal(HttpStatusCode.Unauthorized, forged.StatusCode);
+        Assert.Equal("INVALID_PAYMENT_SIGNATURE", (await forged.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        using var malformed = await client.PostAsJsonAsync("/api/payments/webhook", new { depositId = id, amountVnd = 100000, status = "Paid", gatewayTransactionId = "TX|1", timestamp = 1, signature = "x" });
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+    }
+
     private sealed class TestApiFactory : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -97,6 +134,12 @@ public sealed class WalletKycHttpTests
                 services.AddSingleton<IUserRepository>(repository);
                 services.AddSingleton<IWalletRepository>(repository);
                 services.AddSingleton<IKycRepository>(repository);
+                // These tests link self-held wallets and run without SQL or a master key.
+                services.RemoveAll<IWalletProvisioner>();
+                services.AddSingleton<IWalletProvisioner, DisabledWalletProvisioner>();
+                // Keeps these tests away from the developer's .runtime/payment-webhook.key.
+                services.RemoveAll<PaymentSigner>();
+                services.AddSingleton(new PaymentSigner(new byte[32]));
             });
         }
     }

@@ -17,7 +17,7 @@ for (const width of [375, 1440]) test(`mocked order list and transaction have se
   }, account);
   await page.route("**/api/**", route => {
     const path = new URL(route.request().url()).pathname;
-    return route.fulfill({ json: path.endsWith("/health/blockchain") ? network : path.endsWith("/wallets/me") ? { linked: true, address: account, chainId: 31337 } : path.endsWith("/orders") ? [view] : path.endsWith("/events") ? [] : view });
+    return route.fulfill({ json: path.endsWith("/health/blockchain") ? network : path.endsWith("/wallets/me") ? { linked: true, address: account, chainId: 31337 } : path.endsWith("/orders") || path.endsWith("/arbiters") ? (path.endsWith("/arbiters") ? [] : [view]) : path.endsWith("/events") ? [] : view });
   });
   await page.route("**/rpc", route => {
     const input = route.request().postDataJSON();

@@ -17,6 +17,8 @@ using StudentEscrow.Infrastructure.Auth;
 using StudentEscrow.Infrastructure.Persistence;
 using StudentEscrow.Application.Orders;
 using StudentEscrow.Infrastructure.Orders;
+using StudentEscrow.Infrastructure.Ledger;
+using StudentEscrow.Infrastructure.Payments;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -88,6 +90,36 @@ builder.Services.AddSingleton<IBlockchainSource, NethereumSource>();
 builder.Services.AddScoped<BlockchainSync>();
 builder.Services.AddHostedService<BlockchainWorker>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<LedgerService>();
+builder.Services.AddScoped<CustodialChainService>();
+builder.Services.AddSingleton<IChainGateway, NethereumChainGateway>();
+var custodial = builder.Configuration.GetSection("CustodialWallet").Get<CustodialSettings>() ?? new CustodialSettings();
+// Treasury and imported keys come from Hardhat's public mnemonic, so custody must stay on the local chain.
+if (custodial.Enabled && (!builder.Environment.IsDevelopment() || !blockchain.Enabled))
+    throw new InvalidOperationException("Custodial wallets require Development and the local blockchain worker.");
+custodial.MasterKeyFile = Path.GetFullPath(custodial.MasterKeyFile, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton(custodial);
+if (custodial.Enabled)
+{
+    builder.Services.AddSingleton(_ => WalletKeyVault.Load(custodial, builder.Environment.IsDevelopment()));
+    builder.Services.AddScoped<CustodialWalletProvisioner>();
+    builder.Services.AddScoped<IWalletProvisioner>(services => services.GetRequiredService<CustodialWalletProvisioner>());
+}
+else
+{
+    builder.Services.AddSingleton<IWalletProvisioner, DisabledWalletProvisioner>();
+}
+var payments = builder.Configuration.GetSection("Payments").Get<PaymentSettings>() ?? new PaymentSettings();
+// The mock gateway credits balances without any money arriving, so it must never reach a real deployment.
+if (payments.MockEnabled && !builder.Environment.IsDevelopment())
+    throw new InvalidOperationException("The mock payment gateway is allowed only in Development.");
+payments.WebhookSecretFile = Path.GetFullPath(payments.WebhookSecretFile, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton(payments);
+// While payments are off nothing is signed or accepted, so no secret needs to exist: a random one verifies nothing.
+builder.Services.AddSingleton(_ => payments.MockEnabled
+    ? PaymentSigner.Load(payments, builder.Environment.IsDevelopment())
+    : new PaymentSigner(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+builder.Services.AddScoped<DepositService>();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
@@ -151,6 +183,10 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
             AutoReplenishment = true
         }));
+    options.AddPolicy("payment-webhook", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0, AutoReplenishment = true }));
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.StatusCode = 429;
@@ -197,11 +233,28 @@ if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
     try
     {
         await scope.ServiceProvider.GetRequiredService<StudentEscrowDbContext>().Database.MigrateAsync();
+        if (custodial is { Enabled: true, ImportHardhatWallets: true })
+        {
+            var imported = await scope.ServiceProvider.GetRequiredService<CustodialWalletProvisioner>().ImportHardhatWalletsAsync(CancellationToken.None);
+            if (imported > 0) app.Logger.LogInformation("Imported {Count} existing Hardhat wallets into custody.", imported);
+        }
     }
     catch (Exception exception)
     {
         app.Logger.LogError(exception, "Database initialization failed. Swagger remains available; readiness must pass before proceeding.");
     }
+}
+
+// One-shot step of scripts/demo-run.ps1: the API exits afterwards, so nothing is using the data being removed.
+var demoReset = args.FirstOrDefault(argument => argument.StartsWith("--demo-reset=", StringComparison.Ordinal));
+if (demoReset is not null)
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("The demo reset is allowed only in Development.");
+    await using var scope = app.Services.CreateAsyncScope();
+    var reset = await StudentEscrow.Infrastructure.Demo.DemoReset.RunAsync(scope.ServiceProvider.GetRequiredService<StudentEscrowDbContext>(), CancellationToken.None);
+    await File.WriteAllTextAsync(demoReset["--demo-reset=".Length..], System.Text.Json.JsonSerializer.Serialize(reset.KycVerifiedWallets));
+    app.Logger.LogInformation("Demo reset done. Backup: {Backup}. Wallets with verified KYC: {Count}.", reset.BackupFile, reset.KycVerifiedWallets.Count);
+    return;
 }
 
 app.UseExceptionHandler();

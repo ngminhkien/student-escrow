@@ -24,6 +24,8 @@ public static class OrderRules
             || amount <= 0 || amount >= BigInteger.Pow(10, 38) || amount.ToString(CultureInfo.InvariantCulture) != request.AmountWei
             || request.DeliveryDeadline <= now || request.ReviewWindow is < 1 or > 31536000)
             throw new ApplicationError("INVALID_TERMS", "Check terms, integer wei amount and future deadline.", 400);
+        if (request.AcceptedTermsVersion != StandardTerms.Current.Version)
+            throw new ApplicationError("TERMS_NOT_ACCEPTED", "Bạn cần đọc và đồng ý với điều khoản giao dịch hiện hành.", 400);
     }
 
     // Fixed property order, UTF-8, no whitespace. Return the exact bytes as TermsJson for clients.
@@ -31,11 +33,12 @@ public static class OrderRules
     {
         draft.TermsJson = JsonSerializer.Serialize(new
         {
-            version = 1, chainId, contract, deploymentId = draft.DeploymentId,
+            version = 2, chainId, contract, deploymentId = draft.DeploymentId,
             clientReference = draft.ClientReference, buyer = draft.Buyer, seller = draft.Seller,
             arbiter = draft.Arbiter, description = draft.Description, acceptanceCriteria = draft.AcceptanceCriteria,
             amountWei = draft.AmountWei, deliveryDeadline = draft.DeliveryDeadline, reviewWindow = draft.ReviewWindow,
-            feeBps = 100
+            feeBps = 100, standardTermsVersion = draft.StandardTermsVersion,
+            standardTermsHash = StandardTerms.Find(draft.StandardTermsVersion)?.Hash ?? ""
         });
         draft.TermsHash = Hash(Encoding.UTF8.GetBytes(draft.TermsJson));
     }

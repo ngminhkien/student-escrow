@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { date, eth, states } from "../../domain/rules";
+import { formatVnd } from "../../domain/money";
 import type { OrderView } from "../../domain/types";
 import type { OrdersProps } from "./types";
 import OrderActions from "./OrderActions";
@@ -9,6 +10,7 @@ import { useEffect, useRef } from "react";
 import OrderWorkflow from "./OrderWorkflow";
 import { Icon } from "../../shared/ui/Icon";
 import OrderRules from "./OrderRules";
+import { Copyable } from "../../shared/ui/CopyButton";
 export default function OrderDetail(props: OrdersProps & { view: OrderView; onRefresh: () => void }) {
   const { view, chainTime } = props;
   const draft = view.draft;
@@ -33,10 +35,10 @@ export default function OrderDetail(props: OrdersProps & { view: OrderView; onRe
       {view.chain && ["Completed", "Resolved", "Refunded"].includes(view.chain.state) ? <>
         <OrderActions {...props} blockedHash={blockedHash} /><OrderFiles {...props} onHashMismatch={blockHash} />
       </> : <><OrderFiles {...props} onHashMismatch={blockHash} /><OrderActions {...props} blockedHash={blockedHash} /></>}
-    </div><aside className="order-summary" aria-label="Tóm tắt thỏa thuận"><p className="page-eyebrow">THỎA THUẬN CỦA HAI BÊN</p><h3>Số tiền ký quỹ</h3><p className="summary-amount">{eth(draft.amountWei)} <span>ETH</span></p>
+    </div><aside className="order-summary" aria-label="Tóm tắt thỏa thuận"><p className="page-eyebrow">THỎA THUẬN CỦA HAI BÊN</p><h3>Số tiền ký quỹ</h3><p className="summary-amount">{formatVnd(draft.amountWei)}</p><p className="muted" data-testid="summary-eth">{eth(draft.amountWei)} ETH</p>
       <dl><dt>Hạn giao</dt><dd>{date(draft.deliveryDeadline)}</dd><dt>Khoảng phản hồi</dt><dd>{draft.reviewWindow} giây từ khi bàn giao</dd><dt>Hạn phản hồi</dt><dd>{date(view.chain?.reviewDeadline)}</dd></dl>
       <div className="summary-terms"><h3>Tiêu chí nghiệm thu</h3><p className="pre-wrap">{draft.acceptanceCriteria}</p></div>
-      <details><summary>Các bên tham gia</summary><dl><dt>Buyer</dt><dd className="mono">{draft.buyer}</dd><dt>Seller</dt><dd className="mono">{draft.seller}</dd><dt>Arbiter</dt><dd className="mono">{draft.arbiter}</dd></dl></details>
+      <details><summary>Các bên tham gia</summary><dl>{(["buyer", "seller", "arbiter"] as const).map(role => <div key={role}><dt>{role === "buyer" ? "Buyer" : role === "seller" ? "Seller" : "Arbiter"}</dt><dd>{view.parties?.[role] && <>{view.parties[role]!.fullName} · {view.parties[role]!.maskedEmail}<br /></>}<Copyable value={draft[role]} label={`ví ${role === "buyer" ? "Buyer" : role === "seller" ? "Seller" : "Arbiter"}`} /></dd></div>)}</dl></details>
       <OrderRules />
     </aside></div>
     <div className="order-diagnostics"><details><summary>Chi tiết đồng bộ</summary><p>Đồng bộ worker: <strong>{view.syncStatus}</strong></p><p>Block đã lập chỉ mục: {view.lastIndexedBlock} · Mã đơn trên chain: {view.chain?.orderId ?? "chưa có"}</p><p>Thời gian blockchain: {date(chainTime)}</p></details>

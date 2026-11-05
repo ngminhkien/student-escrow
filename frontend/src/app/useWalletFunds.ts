@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { formatEther, formatUnits } from "ethers";
 import { rpc } from "../infrastructure/wallet/useWallet";
 
-export function useWalletFunds(account: string, enabled: boolean) {
+export function useWalletFunds(account: string, enabled: boolean, revision: number) {
   const [value, setValue] = useState<{ account: string; balance: string; gasPrice: string; error: string } | null>(null);
   useEffect(() => {
     if (!account || !enabled) return;
@@ -19,6 +19,6 @@ export function useWalletFunds(account: string, enabled: boolean) {
     }
     void refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [account, enabled]);
+  }, [account, enabled, revision]);
   return enabled && value?.account === account ? value : null;
 }

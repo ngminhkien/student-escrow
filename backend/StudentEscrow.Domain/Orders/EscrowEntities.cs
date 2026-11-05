@@ -17,6 +17,9 @@ public sealed class OrderDraft
     public string ClientReference { get; set; } = "";
     public string TermsJson { get; set; } = "";
     public string TermsHash { get; set; } = "";
+    public string StandardTermsVersion { get; set; } = "";
+    // The Buyer's recorded consent. The Seller's is the OrderAccepted event on chain.
+    public DateTimeOffset? BuyerAcceptedTermsAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 
@@ -64,6 +67,14 @@ public sealed class ChainEvent
     public string Name { get; set; } = "";
     public string? OrderId { get; set; }
     public string Payload { get; set; } = "";
+}
+
+// Projection of the contract's approvedArbiters mapping, which cannot be enumerated on chain.
+public sealed class ChainArbiter
+{
+    public Guid DeploymentId { get; set; }
+    public string Address { get; set; } = "";
+    public bool Approved { get; set; }
 }
 
 public sealed class ChainOrder

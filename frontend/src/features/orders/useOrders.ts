@@ -6,7 +6,7 @@ import type { OrderView } from "../../domain/types";
 export function usePagedProjection<T>(identity: string, fetchPage: (skip: number, signal: AbortSignal) => Promise<T[]>, size: number, revision: number) {
   const [pages, setPages] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [result, setResult] = useState<{ identity: string; rows: T[]; hasMore: boolean; error: string; loading: boolean }>({ identity, rows: [], hasMore: false, error: "", loading: true });
+  const [result, setResult] = useState<{ identity: string; rows: T[]; hasMore: boolean; error: string; loading: boolean; loaded?: boolean }>({ identity, rows: [], hasMore: false, error: "", loading: true });
   const generation = useRef(0);
   const currentIdentity = useRef(identity); currentIdentity.current = identity;
   const loader = useRef(fetchPage); loader.current = fetchPage;
@@ -19,13 +19,14 @@ export function usePagedProjection<T>(identity: string, fetchPage: (skip: number
     let timer: ReturnType<typeof setTimeout> | undefined;
     const valid = () => !controller.signal.aborted && generation.current === request && currentIdentity.current === identity;
     const read = loader.current;
-    setResult(previous => previous.identity === identity ? { ...previous, loading: true } : { identity, rows: [], error: "", hasMore: false, loading: true });
+    // A live refresh keeps what is on screen; only the first load says it is loading.
+    setResult(previous => previous.identity === identity ? { ...previous, loading: !previous.loaded } : { identity, rows: [], error: "", hasMore: false, loading: true });
     async function refresh() {
       try {
         const values = await Promise.all(Array.from({ length: effectivePages }, (_, index) => read(index * size, controller.signal)));
-        if (valid()) setResult({ identity, rows: values.flat(), hasMore: values.at(-1)?.length === size, error: "", loading: false });
+        if (valid()) setResult({ identity, rows: values.flat(), hasMore: values.at(-1)?.length === size, error: "", loading: false, loaded: true });
       } catch (failure) {
-        if (valid()) setResult(previous => ({ ...previous, identity, error: errorMessage(failure), loading: false }));
+        if (valid()) setResult(previous => ({ ...previous, identity, error: errorMessage(failure), loading: false, loaded: true }));
       } finally { if (valid()) timer = setTimeout(() => void refresh(), 5000); }
     }
     void refresh();

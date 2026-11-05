@@ -75,5 +75,5 @@ public sealed class WalletService(IWalletRepository wallets, IUserRepository use
     }
 
     private WalletResponse Response(WalletLink link) =>
-        new(true, signatures.ChecksumAddress(link.Address), link.ChainId, link.LinkedAt);
+        new(true, signatures.ChecksumAddress(link.Address), link.ChainId, link.LinkedAt, link.IsCustodial);
 }

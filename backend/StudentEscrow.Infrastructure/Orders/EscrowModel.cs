@@ -16,6 +16,7 @@ public static class EscrowModel
         draft.HasOne<ChainDeployment>().WithMany().HasForeignKey(x => x.DeploymentId).OnDelete(DeleteBehavior.Restrict);
         draft.Property(x => x.Description).HasMaxLength(4000);
         draft.Property(x => x.AcceptanceCriteria).HasMaxLength(4000);
+        draft.Property(x => x.StandardTermsVersion).HasMaxLength(32);
         var file = model.Entity<OrderFile>();
         file.HasKey(x => x.Id);
         file.HasIndex(x => new { x.DraftId, x.Kind }).IsUnique().HasFilter("[Kind] = 'product'");
@@ -33,6 +34,9 @@ public static class EscrowModel
         ev.HasIndex(x => new { x.DeploymentId, x.BlockNumber });
         ev.HasIndex(x => new { x.DeploymentId, x.OrderId });
         ev.Property(x => x.Name).HasMaxLength(40);
+        var arbiter = model.Entity<ChainArbiter>();
+        arbiter.HasKey(x => new { x.DeploymentId, x.Address });
+        arbiter.Property(x => x.Address).HasMaxLength(42);
         var order = model.Entity<ChainOrder>();
         order.HasKey(x => new { x.DeploymentId, x.OrderId });
         order.HasIndex(x => new { x.DeploymentId, x.Buyer, x.ClientReference }).IsUnique();

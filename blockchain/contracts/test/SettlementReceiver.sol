@@ -6,6 +6,7 @@ import {Escrow} from "../Escrow.sol";
 /// @dev Test-only actor: refuse ETH or attempt to reenter any escrow call.
 contract SettlementReceiver {
     bool public rejectEther;
+    bool public burnGas;
     bool public reentrySucceeded;
     bytes4 public reentryError;
     address public target;
@@ -18,6 +19,10 @@ contract SettlementReceiver {
         payload = payload_;
     }
 
+    function configureGasBurn(bool burn) external {
+        burnGas = burn;
+    }
+
     function execute(address destination, bytes calldata data) external payable returns (bytes memory) {
         (bool ok, bytes memory result) = destination.call{value: msg.value}(data);
         if (!ok) assembly { revert(add(result, 32), mload(result)) }
@@ -26,6 +31,7 @@ contract SettlementReceiver {
 
     receive() external payable {
         require(!rejectEther, "recipient rejects ETH");
+        while (burnGas) attempts++;
         if (target != address(0)) {
             attempts++;
             bytes memory result;

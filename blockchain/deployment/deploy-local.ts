@@ -9,8 +9,9 @@ try {
   if (chain.chainId !== 31337n || connection.networkName !== "localhost") {
     throw new Error("This script only deploys to the configured localhost chain 31337.");
   }
-  const [admin, buyer, seller, arbiter, platform] = await ethers.getSigners();
-  const escrow = await ethers.deployContract("Escrow", [admin.address, platform.address]);
+  const [admin, buyer, seller, arbiter] = await ethers.getSigners();
+  // The Admin wallet also collects the platform fee. The contract fixes this recipient for the life of the deployment.
+  const escrow = await ethers.deployContract("Escrow", [admin.address, admin.address]);
   await escrow.waitForDeployment();
   const receipt = await escrow.deploymentTransaction()!.wait();
   if (!receipt || receipt.status !== 1) throw new Error("Deployment receipt failed.");
@@ -20,7 +21,7 @@ try {
     contractAddress: await escrow.getAddress(), deploymentBlock: receipt.blockNumber,
     deploymentBlockHash: receipt.blockHash, transactionHash: receipt.hash,
     deployedAt: new Date().toISOString(), compiler: "0.8.28", platformFeeBps: 100,
-    roles: { admin: admin.address, buyer: buyer.address, seller: seller.address, arbiter: arbiter.address, platform: platform.address },
+    roles: { admin: admin.address, buyer: buyer.address, seller: seller.address, arbiter: arbiter.address, platform: admin.address },
     abi: artifact.abi,
   };
   const directory = new URL("local/", import.meta.url);

@@ -3,12 +3,12 @@ import type { FormEvent } from "react";
 import { sha256 } from "ethers";
 import { getOrder, uploadOrderFile, downloadOrderFile } from "../../services/orders";
 import { health } from "../../services/health";
-import { actions, validateTerms } from "../../domain/rules";
+import { actions, sameAddress, validateTerms } from "../../domain/rules";
 import { pendingTimestamp, assertWallet } from "../../wallet";
 import type { OrderFile, OrderView } from "../../domain/types";
 import type { OrdersProps } from "./types";
 import { Icon } from "../../shared/ui/Icon";
-export default function OrderFiles({ session, account, canSign, network, chainTime, busy, run, view, onHashMismatch, onRefresh }: OrdersProps & { view: OrderView; onHashMismatch: () => void; onRefresh: () => void }) {
+export default function OrderFiles({ session, account, canSign, network, chainTime, busy, run, view, onHashMismatch, onRefresh, custodial }: OrdersProps & { view: OrderView; onHashMismatch: () => void; onRefresh: () => void }) {
   const [fileCheck, setFileCheck] = useState("");
   const allowed = actions(view, account, network, chainTime);
   const draft = view.draft;
@@ -27,7 +27,7 @@ export default function OrderFiles({ session, account, canSign, network, chainTi
     void run("Upload file", async () => {
       if (!allowed[kind]) throw new Error("Không có quyền upload loại file này ở trạng thái hiện tại.");
       if (!canSign) throw new Error("Chọn đúng ví liên kết trước khi tải lên.");
-      await assertWallet(account);
+      if (!custodial) await assertWallet(account);
       const freshNetwork = await health();
       const fresh = await getOrder(session.accessToken, draft.id);
       validateTerms(fresh, freshNetwork);
@@ -55,6 +55,7 @@ export default function OrderFiles({ session, account, canSign, network, chainTi
     link.href = url; link.download = file.fileName; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
+  const productReadable = sameAddress(account, draft.seller) || !!view.chain?.deliveryHash || (sameAddress(account, draft.arbiter) && view.chain?.state === "Disputed");
   return <section className="order-files" aria-label="File sản phẩm và bằng chứng">
     <div className="file-section-title"><span className="surface-icon"><Icon name="code" size={22} /></span><h3>Sản phẩm bàn giao</h3></div>
     {allowed.product && <form className="upload-form product-upload" onSubmit={upload} aria-label="Tải ZIP mã nguồn">
@@ -71,9 +72,9 @@ export default function OrderFiles({ session, account, canSign, network, chainTi
     </form></details>}
     {(["product", "evidence"] as const).filter(kind => kind === "product" || view.files.some(file => file.kind === kind)).map(kind => <section key={kind} aria-label={kind === "product" ? "Sản phẩm bàn giao" : "Bằng chứng"}>{kind === "evidence" && <h4>Bằng chứng</h4>}{!view.files.some(file => file.kind === kind) ? <p>Chưa có ZIP sản phẩm.</p> : <ul className="files">{view.files.filter(file => file.kind === kind).map(file => <li key={file.id}>
       <div><strong>{file.fileName}</strong> · {file.kind === "product" ? "Sản phẩm" : "Bằng chứng"} · {file.length.toLocaleString("vi-VN")} byte
-        <details><summary>Hash file</summary><div className="mono small">SHA-256: {file.sha256}</div></details></div><button className="secondary" disabled={busy} onClick={() => void run("Tải và kiểm tra hash", () => download(file))}>Tải {file.fileName}</button>
+        <details><summary>Hash file</summary><div className="mono small">SHA-256: {file.sha256}</div></details></div>{file.kind === "product" && !productReadable ? <span className="small muted">Mở sau khi Seller xác nhận bàn giao</span> : <button className="secondary" disabled={busy} onClick={() => void run("Tải và kiểm tra hash", () => download(file))}>Tải {file.fileName}</button>}
     </li>)}</ul>}</section>)}
-    {view.chain?.deliveryHash && <p data-testid="delivery-match">{view.deliveryFileMatchesChain ? "✓ File khớp bản bàn giao trên chain." : "Không khớp ZIP trên hệ thống."}</p>}
+    {view.chain?.deliveryHash && <p data-testid="delivery-match">{view.deliveryFileMatchesChain ? "File khớp bản bàn giao trên chain." : "Không khớp ZIP trên hệ thống."}</p>}
     <details><summary>Kiểm tra hash file có trên máy</summary><label>File cần kiểm tra<input type="file" onChange={event => {
       const file = event.currentTarget.files?.[0]; if (!file) return;
       setFileCheck(""); void run("Kiểm tra SHA-256", async () => {

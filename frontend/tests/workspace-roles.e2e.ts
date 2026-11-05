@@ -39,6 +39,7 @@ for (const admin of [false, true]) for (const width of [375, 1440]) {
     const nav = page.getByRole("navigation", { name: "Chức năng" });
     await expect(nav.getByRole("button", { name: "Quản trị", exact: true })).toHaveCount(admin ? 1 : 0);
     await expect(nav.getByRole("button", { name: "Đơn hàng", exact: true })).toHaveCount(admin ? 0 : 1);
+    await expect(nav.getByRole("button", { name: "Phân xử", exact: true })).toHaveCount(admin ? 1 : 0);
     await expect(page.getByRole("heading", { name: admin ? "Quản trị xác minh" : "Đơn hàng của bạn", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await mkdir("test-results/screenshots", { recursive: true });

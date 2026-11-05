@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
-import { JsonRpcProvider, Wallet, getBytes, parseEther } from "ethers";
+import { Contract, JsonRpcProvider, Wallet, getBytes, parseEther } from "ethers";
 import type { Signer } from "ethers";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
+import abi from "../../blockchain/deployment/Escrow.abi.json" with { type: "json" };
 
 const rpc = new JsonRpcProvider("http://127.0.0.1:8545");
 test.afterAll(() => rpc.destroy());
@@ -21,6 +22,7 @@ async function actorPage(browser: Browser, signer: Signer, admin = false) {
   if (admin) {
     await page.addInitScript(() => sessionStorage.setItem("escrow.session", JSON.stringify({ accessToken: "admin-workspace-fixture", expiresAt: "2099-01-01T00:00:00Z", user: { id: "admin-fixture", fullName: "Admin fixture", email: "viego.hvnh@gmail.com" } })));
     await page.route("**/api/wallets/me", route => route.fulfill({ json: { linked: true, address: actorAddress, chainId: 31337 } }));
+    await page.route("**/api/admin/accounts", route => route.fulfill({ json: { accounts: [], ledgerTotalWei: "0", ledgerTotalVnd: "0", treasuryWei: "0", contractWei: "0" } }));
   }
   await page.exposeBinding("__walletRpc", async (_source, input: { method: string; params?: unknown[] }) => {
     try {
@@ -79,11 +81,13 @@ async function actorPage(browser: Browser, signer: Signer, admin = false) {
   return { page, context, address: actorAddress };
 }
 
-async function register(page: Page, email: string) {
+async function register(page: Page, email: string, name = "Demo Student") {
   await page.getByRole("button", { name: "Chưa có tài khoản? Đăng ký" }).click();
-  await page.getByLabel("Họ tên", { exact: true }).fill("Demo Student");
+  await page.getByLabel("Họ tên", { exact: true }).fill(name);
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Mật khẩu", { exact: true }).fill("DemoPassword123!");
+  // This scenario covers self-held wallets; the generated-wallet path is in custodial-wallet.e2e.ts.
+  await page.getByRole("radio", { name: /Tự giữ ví bằng MetaMask/ }).check();
   await page.getByRole("button", { name: "Đăng ký", exact: true }).click();
   await expect(page.getByRole("button", { name: "Đăng xuất", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Tài khoản & ví", exact: true }).click();
@@ -115,7 +119,8 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   const run = randomUUID();
   await register(buyer.page, `ui.${run}.buyer@example.test`);
   await register(seller.page, `ui.${run}.seller@example.test`);
-  await register(arbiter.page, `ui.${run}.arbiter@example.test`);
+  const arbiterName = `Arbiter ${run}`;
+  await register(arbiter.page, `ui.${run}.arbiter@example.test`, arbiterName);
   console.log("PASS UI register/link for Buyer, Seller and Arbiter");
 
   await buyer.page.getByLabel("Giấy tờ mẫu").selectOption("DEMO-DOCUMENT-FAIL");
@@ -148,14 +153,28 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await buyer.page.evaluate(address => window.__testWallet.change(address, "0x7a69"), buyer.address);
   console.log("PASS UI KYC, Admin verification, wrong wallet and wrong network");
 
+  // The admin workspace here is a fixture without an API session, so the platform list is set directly on the contract.
+  const deployment = await ready.clone().json();
+  await (await new Contract(deployment.contractAddress, abi, adminSigner).setArbiterApproved(arbiter.address, true)).wait();
+  async function acceptAsSeller(id: string) {
+    await openOrder(seller.page, id);
+    await expect(seller.page.getByRole("button", { name: "Chấp nhận đơn", exact: true })).toBeDisabled();
+    await seller.page.getByLabel("Tôi đã đọc và đồng ý với thỏa thuận", { exact: false }).check();
+    await seller.page.getByRole("button", { name: "Chấp nhận đơn", exact: true }).click();
+    await expect(seller.page.getByTestId("order-state")).toHaveText("Seller đã chấp nhận");
+    await expect(buyer.page.getByTestId("order-state")).toHaveText("Seller đã chấp nhận");
+  }
   async function createDraft(description: string, reviewWindow = "300") {
     await buyer.page.getByRole("navigation", { name: "Chức năng" }).getByRole("button", { name: "Đơn hàng", exact: true }).click();
     await buyer.page.getByRole("button", { name: "Tạo bản nháp", exact: true }).click();
-    await buyer.page.getByLabel("Ví Seller", { exact: true }).fill(seller.address);
-    await buyer.page.getByLabel("Ví Arbiter", { exact: true }).fill(arbiter.address);
+    await buyer.page.getByLabel("Email Seller", { exact: true }).fill(`ui.${run}.seller@example.test`);
+    await buyer.page.getByRole("button", { name: "Tìm Seller", exact: true }).click();
+    await expect(buyer.page.locator(".party-found")).toContainText(seller.address);
+    await buyer.page.locator("select[name=arbiter]").selectOption({ label: arbiterName }, { timeout: 15000 });
     await buyer.page.getByLabel("Nội dung công việc", { exact: true }).fill(description);
-    await buyer.page.getByLabel("Tiêu chí nghiệm thu", { exact: true }).fill("Responsive 375px và 1440px");
+    await buyer.page.locator("textarea[name=criteria]").fill("Responsive 375px và 1440px");
     await buyer.page.getByLabel("Thời gian phản hồi (giây)", { exact: true }).fill(reviewWindow);
+    await buyer.page.getByLabel("Tôi đã đọc và đồng ý", { exact: false }).check();
     await buyer.page.getByRole("button", { name: "Lưu bản nháp", exact: true }).click();
     await expect(buyer.page.getByTestId("order-state")).toHaveText("Bản nháp");
     return new URL(buyer.page.url()).searchParams.get("order")!;
@@ -166,7 +185,8 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await expect(buyer.page.getByRole("alert").filter({ hasText: "từ chối" })).toBeVisible();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Bản nháp");
   await buyer.page.getByRole("button", { name: "Tạo đơn trên chain", exact: true }).click();
-  await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã tạo trên chain");
+  await expect(buyer.page.getByTestId("order-state")).toHaveText("Chờ Seller chấp nhận");
+  await acceptAsSeller(orderId);
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
   await openOrder(seller.page, orderId);
@@ -196,7 +216,8 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
 
   const disputed = await createDraft(`Dispute ${run}`);
   await buyer.page.getByRole("button", { name: "Tạo đơn trên chain", exact: true }).click();
-  await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã tạo trên chain");
+  await expect(buyer.page.getByTestId("order-state")).toHaveText("Chờ Seller chấp nhận");
+  await acceptAsSeller(disputed);
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
   await expect(buyer.page.getByRole("button", { name: "Mở tranh chấp", exact: true })).toBeDisabled();
@@ -218,7 +239,8 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
 
   const refundId = await createDraft(`Refund ${run}`);
   await buyer.page.getByRole("button", { name: "Tạo đơn trên chain", exact: true }).click();
-  await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã tạo trên chain");
+  await expect(buyer.page.getByTestId("order-state")).toHaveText("Chờ Seller chấp nhận");
+  await acceptAsSeller(refundId);
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
   const deadline = await buyer.page.evaluate(async id => {
@@ -232,7 +254,8 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
 
   const timeoutId = await createDraft(`Review timeout ${run}`, "2");
   await buyer.page.getByRole("button", { name: "Tạo đơn trên chain", exact: true }).click();
-  await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã tạo trên chain");
+  await expect(buyer.page.getByTestId("order-state")).toHaveText("Chờ Seller chấp nhận");
+  await acceptAsSeller(timeoutId);
   await buyer.page.getByRole("button", { name: "Nạp 0.01 ETH", exact: true }).click();
   await expect(buyer.page.getByTestId("order-state")).toHaveText("Đã ký quỹ");
   await openOrder(seller.page, timeoutId);
@@ -245,6 +268,6 @@ test("Real UI/API/SQL/chain: roles, KYC, files, settlement, wrong wallet/network
   await expect(seller.page.getByTestId("order-state")).toHaveText("Hoàn thành");
   console.log("PASS UI delivery refund and review-timeout claim while local chain is idle");
   expect(errors, "No uncaught browser exceptions").toEqual([]);
-  await testInfo.attach("deployment", { body: JSON.stringify(await ready.json()), contentType: "application/json" });
+  await testInfo.attach("deployment", { body: JSON.stringify(deployment), contentType: "application/json" });
   for (const actor of [admin, buyer, seller, arbiter]) await actor.context.close();
 });

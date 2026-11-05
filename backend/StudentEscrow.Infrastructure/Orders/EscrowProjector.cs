@@ -8,16 +8,20 @@ namespace StudentEscrow.Infrastructure.Orders;
 
 public static class EscrowProjector
 {
+    public const string ArbiterEvent = "ArbiterApprovalUpdated";
     private static readonly (string Name, string Signature, int Topics, int Words)[] Events =
     [
         ("OrderCreated", "OrderCreated(uint256,bytes32,address,address,address,uint256,uint256,bytes32,uint256,uint256)", 4, 7),
+        ("OrderAccepted", "OrderAccepted(uint256,address,bytes32)", 3, 1),
+        ("OrderCancelled", "OrderCancelled(uint256,address)", 3, 0),
         ("Deposited", "Deposited(uint256,uint256)", 2, 1),
         ("Delivered", "Delivered(uint256,bytes32,uint256,uint256)", 2, 3),
         ("Disputed", "Disputed(uint256,address)", 3, 0),
         ("Released", "Released(uint256,uint256,uint256,uint256)", 2, 3),
         ("Resolved", "Resolved(uint256,uint256,uint256,uint256,uint256)", 2, 4),
         ("Refunded", "Refunded(uint256,uint256)", 2, 1),
-        ("WalletVerificationUpdated", "WalletVerificationUpdated(address,bool)", 2, 1)
+        ("WalletVerificationUpdated", "WalletVerificationUpdated(address,bool)", 2, 1),
+        (ArbiterEvent, "ArbiterApprovalUpdated(address,bool)", 2, 1)
     ];
     public static string Topic(string signature) => "0x" + Sha3Keccack.Current.CalculateHash(signature);
     public static string Integer(string word) => BigInteger.Parse("0" + word.Replace("0x", ""), NumberStyles.HexNumber)
@@ -32,8 +36,13 @@ public static class EscrowProjector
             throw new InvalidDataException("Malformed escrow event.");
         return new ChainEvent { DeploymentId = deploymentId, TransactionHash = log.TransactionHash,
             LogIndex = log.LogIndex, BlockNumber = log.BlockNumber, BlockHash = log.BlockHash,
-            Name = definition.Name, OrderId = definition.Name == "WalletVerificationUpdated" ? null : Integer(log.Topics[1]),
+            Name = definition.Name, OrderId = definition.Name is "WalletVerificationUpdated" or ArbiterEvent ? null : Integer(log.Topics[1]),
             Payload = JsonSerializer.Serialize(log) };
+    }
+    public static (string Address, bool Approved) ArbiterChange(ChainEvent ev)
+    {
+        var log = JsonSerializer.Deserialize<RpcLog>(ev.Payload)!;
+        return ("0x" + log.Topics[1][26..].ToLowerInvariant(), Integer(log.Data) != "0");
     }
     public static ChainOrder Apply(ChainEvent ev, ChainOrder? order)
     {
@@ -52,7 +61,9 @@ public static class EscrowProjector
         if (order is null) throw new InvalidDataException("Order event without OrderCreated.");
         var allowed = ev.Name switch
         {
-            "Deposited" => order.State == "Created" && Num(0) == order.AmountWei,
+            "OrderAccepted" => order.State == "Created" && Word(0) == order.TermsHash,
+            "OrderCancelled" => order.State is "Created" or "Accepted",
+            "Deposited" => order.State == "Accepted" && Num(0) == order.AmountWei,
             "Delivered" or "Refunded" => order.State == "Funded",
             "Disputed" => order.State is "Funded" or "Delivered",
             "Released" => order.State == "Delivered",
@@ -62,6 +73,8 @@ public static class EscrowProjector
         if (!allowed) throw new InvalidDataException("Invalid escrow event sequence.");
         switch (ev.Name)
         {
+            case "OrderAccepted": order.State = "Accepted"; break;
+            case "OrderCancelled": order.State = "Cancelled"; break;
             case "Deposited": order.State = "Funded"; break;
             case "Delivered": order.State = "Delivered"; order.DeliveryHash = Word(0); order.ReviewDeadline = Long(2); break;
             case "Disputed": order.State = "Disputed"; break;

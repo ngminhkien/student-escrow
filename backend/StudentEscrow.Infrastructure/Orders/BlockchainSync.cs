@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StudentEscrow.Domain.Orders;
+using StudentEscrow.Infrastructure.Ledger;
 using StudentEscrow.Infrastructure.Persistence;
 
 namespace StudentEscrow.Infrastructure.Orders;
@@ -10,6 +11,8 @@ namespace StudentEscrow.Infrastructure.Orders;
 public sealed class BlockchainSync(StudentEscrowDbContext db, IBlockchainSource chain,
     BlockchainSettings settings, TimeProvider clock)
 {
+    private readonly LedgerService ledger = new(db, clock);
+
     public async Task SyncAsync(DeploymentManifest manifest, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -34,6 +37,8 @@ public sealed class BlockchainSync(StudentEscrowDbContext db, IBlockchainSource 
             await transaction.CommitAsync(ct);
             return;
         }
+        if (deployment.LastBlock < deployment.DeploymentBlock)
+            await ledger.ReleaseArchivedHoldsAsync(deployment.Id, ct);
         // Walk back to a common ancestor; full journal retained for this local demo.
         var ancestor = deployment.LastBlock;
         while (ancestor >= deployment.DeploymentBlock)
@@ -44,6 +49,7 @@ public sealed class BlockchainSync(StudentEscrowDbContext db, IBlockchainSource 
         }
         if (ancestor != deployment.LastBlock)
         {
+            await ledger.ReverseChainCreditsAsync(deployment.Id, ancestor, ct);
             await db.Set<ChainEvent>().Where(e => e.DeploymentId == deployment.Id && e.BlockNumber > ancestor).ExecuteDeleteAsync(ct);
             await db.Set<ChainBlock>().Where(b => b.DeploymentId == deployment.Id && b.Number > ancestor).ExecuteDeleteAsync(ct);
             await db.Set<ChainOrder>().Where(o => o.DeploymentId == deployment.Id).ExecuteDeleteAsync(ct);
@@ -56,6 +62,16 @@ public sealed class BlockchainSync(StudentEscrowDbContext db, IBlockchainSource 
                 rebuilt[ev.OrderId!] = EscrowProjector.Apply(ev, order);
             }
             db.AddRange(rebuilt.Values);
+            await db.Set<ChainArbiter>().Where(a => a.DeploymentId == deployment.Id).ExecuteDeleteAsync(ct);
+            var arbiters = await db.Set<ChainEvent>().AsNoTracking().Where(e => e.DeploymentId == deployment.Id && e.Name == EscrowProjector.ArbiterEvent)
+                .OrderBy(e => e.BlockNumber).ThenBy(e => e.LogIndex).ToListAsync(ct);
+            var approvals = new Dictionary<string, bool>();
+            foreach (var ev in arbiters)
+            {
+                var change = EscrowProjector.ArbiterChange(ev);
+                approvals[change.Address] = change.Approved;
+            }
+            db.AddRange(approvals.Select(item => new ChainArbiter { DeploymentId = deployment.Id, Address = item.Key, Approved = item.Value }));
             deployment.LastBlock = ancestor;
             deployment.LastBlockHash = ancestor >= deployment.DeploymentBlock
                 ? (await chain.BlockAsync(ancestor, ct))!.Hash : "";
@@ -78,11 +94,19 @@ public sealed class BlockchainSync(StudentEscrowDbContext db, IBlockchainSource 
                 var ev = EscrowProjector.Decode(deployment.Id, log);
                 if (ev is null) continue;
                 db.Add(ev);
+                if (ev.Name == EscrowProjector.ArbiterEvent)
+                {
+                    var change = EscrowProjector.ArbiterChange(ev);
+                    var arbiter = await db.Set<ChainArbiter>().FindAsync([deployment.Id, change.Address], ct);
+                    if (arbiter is null) db.Add(new ChainArbiter { DeploymentId = deployment.Id, Address = change.Address, Approved = change.Approved });
+                    else arbiter.Approved = change.Approved;
+                }
                 if (ev.OrderId is not null)
                 {
                     var order = await db.Set<ChainOrder>().FindAsync([deployment.Id, ev.OrderId], ct);
                     var projected = EscrowProjector.Apply(ev, order);
                     if (order is null) db.Add(projected);
+                    await ledger.ApplyChainEventAsync(ev, projected, ct);
                 }
             }
             db.Add(new ChainBlock { DeploymentId = deployment.Id, Number = number, Hash = block.Hash });

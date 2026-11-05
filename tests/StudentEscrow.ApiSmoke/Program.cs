@@ -40,7 +40,7 @@ async Task<(string Token, string Email)> Account()
 {
     var email = $"wallet.smoke.{Guid.NewGuid():N}@example.test";
     var result = await Send("POST", "/api/auth/register", 201,
-        new { email, fullName = "Demo Wallet Student", password = "DemoPassword123!" });
+        new { email, fullName = "Demo Wallet Student", password = "DemoPassword123!", useExternalWallet = true });
     return (result.GetProperty("accessToken").GetString()!, email);
 }
 

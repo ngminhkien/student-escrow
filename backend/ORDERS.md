@@ -1,6 +1,6 @@
 # Phần 04 — Đơn hàng, file và đồng bộ blockchain local
 
-API giữ bản nháp và file; contract quyết định tiền/trạng thái. Worker Nethereum chỉ đọc RPC, không có private key, không ký hộ người dùng. Tạo draft không gửi giao dịch và không xác minh KYC on-chain. Buyer/Seller phải được Admin xác minh trong contract trước khi tạo/nạp đơn; KYC mock trong SQL vẫn độc lập.
+API giữ bản nháp và file; contract quyết định tiền/trạng thái. Worker Nethereum chỉ đọc RPC, không có private key và không ký giao dịch. Việc ký cho ví lưu ký nằm ở `POST /api/orders/{id}/actions` (xem README gốc). Sản phẩm chỉ tải được bởi Seller cho đến khi có `Delivered` trên chain; Arbiter được tải thêm khi đơn đang tranh chấp.
 
 ## Chạy và kiểm thử trên PowerShell
 
@@ -94,7 +94,7 @@ Ví dụ tạo draft; thay địa chỉ và Unix deadline bằng giá trị th�
 }
 ```
 
-Buyer ký `createOrder` với **đúng** Seller, Arbiter, amountWei, clientReference, termsHash, deliveryDeadline, reviewWindow trả từ draft; sau đó ký `deposit`. Poll GET tới `chain.state=Funded`, `termsMatch=true`. Seller upload ZIP, ký `markDelivered(orderId, file.sha256)`. Buyer tải file, kiểm tra byte/hash và nghiệm thu rồi ký `confirmReceipt`, hoặc một bên ký `raiseDispute`; Arbiter ký `resolveDispute` nếu có tranh chấp. [Frontend phần 05](../frontend/README.md) đã có nút MetaMask cho các thao tác này.
+Tạo bản nháp bằng `sellerEmail`, `arbiter` lấy từ `GET /api/orders/arbiters` và `acceptedTermsVersion` lấy từ `GET /api/orders/terms`. Buyer ký `createOrder` với **đúng** Seller, Arbiter, amountWei, clientReference, termsHash, deliveryDeadline, reviewWindow trả từ draft; sau đó ký `deposit`. Poll GET tới `chain.state=Funded`, `termsMatch=true`. Seller upload ZIP, ký `markDelivered(orderId, file.sha256)`. Buyer tải file, kiểm tra byte/hash và nghiệm thu rồi ký `confirmReceipt`, hoặc một bên ký `raiseDispute`; Arbiter ký `resolveDispute` nếu có tranh chấp. [Frontend phần 05](../frontend/README.md) đã có nút MetaMask cho các thao tác này.
 
 `termsJson` là chuỗi JSON chính xác do server tạo (version 1, thứ tự field cố định); `termsHash` là SHA-256 của UTF-8 **chuỗi đó**, không hash JSON reserialize ở client. Hash bao gồm deployment/chain/contract, reference, các bên, nội dung, tiêu chí, wei, deadline/review window và phí 100 bps. AmountWei trả dạng chuỗi để không mất độ chính xác JavaScript/SQL.
 
@@ -120,7 +120,7 @@ Trong `appsettings.Local.json` hoặc environment (`Blockchain__Enabled`, ...):
     "RpcUrl": "http://127.0.0.1:8545",
     "ManifestPath": "../../blockchain/deployment/local/latest.json",
     "Confirmations": 0,
-    "PollSeconds": 2,
+    "PollSeconds": 1,
     "BatchSize": 50
   }
 }

@@ -12,7 +12,7 @@ public sealed class BlockchainSettings
     public string RpcUrl { get; set; } = "http://127.0.0.1:8545";
     public string ManifestPath { get; set; } = "../../blockchain/deployment/local/latest.json";
     public int Confirmations { get; set; } = 0;
-    public int PollSeconds { get; set; } = 2;
+    public int PollSeconds { get; set; } = 1;
     public int BatchSize { get; set; } = 50;
 }
 

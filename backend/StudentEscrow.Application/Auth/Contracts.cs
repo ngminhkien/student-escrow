@@ -22,6 +22,9 @@ public sealed class RegisterRequest
 
     [Required, StringLength(128, MinimumLength = 10)]
     public string Password { get; init; } = string.Empty;
+
+    // Opt out of the server-generated wallet and link a self-held one through the signed challenge instead.
+    public bool UseExternalWallet { get; init; }
 }
 
 public sealed class LoginRequest

@@ -14,7 +14,7 @@ export function useOrderDetail(token: string, id: string, deploymentId: string |
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const valid = () => !controller.signal.aborted && generation.current === request && currentIdentity.current === identity;
-    setResult(previous => previous.identity === identity ? { ...previous, loading: !!id } : { identity, view: null, loading: !!id, error: "" });
+    setResult(previous => previous.identity === identity ? { ...previous, loading: !!id && !previous.view } : { identity, view: null, loading: !!id, error: "" });
     if (!id) return () => controller.abort();
     async function refresh() {
       try { const view = await getOrder(token, id, controller.signal); if (valid()) setResult({ identity, view, loading: false, error: "" }); }

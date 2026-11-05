@@ -4,15 +4,19 @@ import { getLinkedWallet, getKyc, createWalletChallenge, linkWallet, submitKyc a
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { assertWallet, contractAt, errorMessage, injected } from "../../wallet";
 import { sameAddress } from "../../rules";
-import type { Kyc, LinkedWallet, NetworkStatus, RunAction, Session } from "../../types";
+import type { Kyc, LinkedWallet, NetworkStatus, RunAction, Session, WalletAccount } from "../../types";
 import { Icon } from "../../shared/ui/Icon";
+import { Copyable } from "../../shared/ui/CopyButton";
+import DepositPanel from "./DepositPanel";
+import WalletLedger from "./WalletLedger";
+import { formatEthAmount, formatVnd, VND_PER_ETH } from "../../domain/money";
 
 export interface AccountPageProps {
   session: Session; account: string; canSign: boolean; network: NetworkStatus; busy: boolean; run: RunAction;
   onLinked: (wallet: LinkedWallet) => void; revision: number;
-  chooseWallet?: () => Promise<void>;
+  chooseWallet?: () => Promise<void>; ledger?: WalletAccount | null;
 }
-export default function AccountPage({ session, account, canSign, network, busy, run, onLinked, revision, chooseWallet }: AccountPageProps) {
+export default function AccountPage({ session, account, canSign, network, busy, run, onLinked, revision, chooseWallet, ledger }: AccountPageProps) {
   const [wallet, setWallet] = useState<LinkedWallet | null>(null);
   const [kyc, setKyc] = useState<Kyc | null>(null);
   const [verified, setVerified] = useState<boolean | null>(null);
@@ -100,15 +104,18 @@ export default function AccountPage({ session, account, canSign, network, busy, 
     void run("Nộp KYC demo", async () => setKyc(await postKyc(session.accessToken, {
       fullName: String(data.get("fullName") ?? ""), studentNumber: String(data.get("studentNumber") ?? ""), documentReference: String(data.get("documentReference") ?? ""), selfieReference: String(data.get("selfieReference") ?? "") })));
   }
-  return <div className="account-page"><div className="workflow-strip"><span>01 · Đăng nhập</span><span>02 · Liên kết ví</span><span>03 · Xác minh on-chain</span></div><section className="panel profile-card"><div className="profile-initial" aria-hidden="true">{session.user.fullName.slice(0, 1).toUpperCase()}</div><div><p className="page-eyebrow">TÀI KHOẢN CỦA BẠN</p><h2>{session.user.fullName}</h2><p className="muted">{session.user.email}</p></div></section><div className="grid account-grid">
-    <section className="panel"><div className="card-heading"><span className="surface-icon"><Icon name="wallet" size={23} /></span><div><h2>Liên kết ví</h2><p className="muted">Một tài khoản, một địa chỉ ví cố định.</p></div></div>
+  return <div className="account-page"><div className="workflow-strip"><span>01 · Đăng nhập</span><span>02 · {wallet?.custodial ? "Ví đã sẵn sàng" : "Liên kết ví"}</span><span>03 · Xác minh on-chain</span></div><section className="panel profile-card"><div className="profile-initial" aria-hidden="true">{session.user.fullName.slice(0, 1).toUpperCase()}</div><div><p className="page-eyebrow">TÀI KHOẢN CỦA BẠN</p><h2>{session.user.fullName}</h2><p className="muted">{session.user.email}</p></div></section><div className="grid account-grid">
+    <section className="panel"><div className="card-heading"><span className="surface-icon"><Icon name="wallet" size={23} /></span><div><h2>{wallet?.custodial ? "Ví của bạn" : "Liên kết ví"}</h2><p className="muted">Một tài khoản, một địa chỉ ví cố định.</p></div></div>
       {error && <p role="alert">{error}</p>}
-      <dl><dt>Ví liên kết</dt><dd className="mono">{wallet?.address ?? "Chưa liên kết"}</dd><dt>Mạng của ví liên kết</dt><dd>{wallet?.chainId ?? "—"}</dd></dl>
-      <dl><dt>Ví đang chọn trong MetaMask</dt><dd className="mono">{account || "Chưa kết nối"}</dd></dl>
-      {!wallet?.linked && <><p>Chọn ví bạn muốn dùng và ký xác nhận một lần. Chữ ký liên kết không chuyển ETH và không tốn gas.</p>
+      <dl><dt>Ví liên kết</dt><dd>{wallet?.address ? <Copyable value={wallet.address} label="ví liên kết" /> : "Chưa liên kết"}</dd><dt>Mạng của ví liên kết</dt><dd>{wallet?.chainId ?? "—"}</dd></dl>
+      {!wallet?.custodial && <dl><dt>Ví đang chọn trong MetaMask</dt><dd>{account ? <Copyable value={account} label="ví đang chọn" /> : "Chưa kết nối"}</dd></dl>}
+      {wallet?.custodial && ledger && <dl><dt>Số dư khả dụng</dt><dd data-testid="ledger-balance"><strong>{formatVnd(ledger.balanceWei)}</strong> <span className="muted">{formatEthAmount(ledger.balanceWei)}</span></dd><dt>Đang ký quỹ</dt><dd>{formatVnd(ledger.lockedWei)}</dd><dt>Tỷ giá cố định</dt><dd>1 ETH = {formatVnd(VND_PER_ETH * 10n ** 10n)}</dd></dl>}
+      {!wallet?.linked && <><p>Chọn ví bạn muốn dùng và ký xác nhận một lần. Chữ ký liên kết không chuyển ETH và không tốn gas. Sau khi liên kết, bạn nạp được ETH vào ví ngay tại trang này.</p>
         {chooseWallet && <button className="secondary" disabled={busy} onClick={() => void run("Chọn ví MetaMask", chooseWallet)}>Đổi ví MetaMask</button>}{" "}
         <button disabled={busy || !canSign || !wallet} onClick={() => void run("Liên kết ví", link)}>Ký và liên kết ví</button></>}
-      {wallet?.linked && <p>Ví đã liên kết cố định. Khi đăng nhập, ứng dụng tự kiểm tra và yêu cầu chọn đúng ví này. Bạn có thể bấm “Đồng bộ ví” để kiểm tra lại bất cứ lúc nào.</p>}
+      {wallet?.linked && (wallet.custodial
+        ? <p>Hệ thống tạo và giữ ví này cho bạn. Giao dịch được ký khi bạn bấm thao tác, không cần MetaMask; phí gas do nền tảng chi trả.</p>
+        : <p>Ví đã liên kết cố định. Khi đăng nhập, ứng dụng tự kiểm tra và yêu cầu chọn đúng ví này. Bạn có thể bấm “Đồng bộ ví” để kiểm tra lại bất cứ lúc nào.</p>)}
       <hr /><h3>Xác minh on-chain</h3><p>{verified === null ? "Chưa đọc được trạng thái contract." : verified ? "Đã được Admin xác minh trên contract hiện tại." : "Chưa được Admin xác minh trên contract hiện tại."}</p>
       <p className="muted">Buyer và Seller cần xác minh on-chain để tạo/nạp đơn. KYC mock bên cạnh không tự cấp quyền này. Sau khi deploy lại, Admin cần xác minh lại.</p>
     </section>
@@ -126,5 +133,5 @@ export default function AccountPage({ session, account, canSign, network, busy, 
       </form>
       {kyc?.status === "VERIFIED" && <p>Hồ sơ VERIFIED không nhận nộp lại. Hồ sơ REJECTED có thể sửa mẫu và nộp lại.</p>}
     </section>
-  </div></div>;
+  </div>{wallet?.linked && (wallet.custodial ? !!ledger : !!wallet.address) && <DepositPanel token={session.accessToken} busy={busy} run={run} revision={revision} walletAddress={wallet.custodial ? null : wallet.address} />}{wallet?.custodial && ledger && <WalletLedger account={ledger} />}</div>;
 }

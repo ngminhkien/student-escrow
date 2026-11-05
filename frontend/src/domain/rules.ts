@@ -5,7 +5,7 @@ export const sameAddress = (a?: string | null, b?: string | null) => !!a && !!b 
 export const eth = (wei: string) => formatEther(wei);
 export const short = (value: string) => value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
 export const date = (seconds?: number | null) => seconds ? new Date(seconds * 1000).toLocaleString("vi-VN") : "—";
-export const states: Record<string, string> = { Draft: "Bản nháp", Created: "Đã tạo trên chain", Funded: "Đã ký quỹ",
+export const states: Record<string, string> = { Draft: "Bản nháp", Created: "Chờ Seller chấp nhận", Accepted: "Seller đã chấp nhận", Cancelled: "Đã hủy", Funded: "Đã ký quỹ",
   Delivered: "Đã bàn giao", Completed: "Hoàn thành", Disputed: "Đang tranh chấp", Resolved: "Đã phân xử", Refunded: "Đã hoàn tiền" };
 export function amountWei(input: string) {
   if (!/^(0|[1-9]\d*)(\.\d{1,18})?$/.test(input)) throw new Error("Nhập số ETH dương, tối đa 18 chữ số thập phân.");
@@ -34,7 +34,7 @@ export function validateTerms(view: OrderView, network: NetworkStatus) {
   if (!network.deploymentId || !network.contractAddress || d.deploymentId !== network.deploymentId) throw new Error("Đơn thuộc deployment cũ. Hãy tạo bản nháp mới.");
   if (sha256(toUtf8Bytes(d.termsJson)) !== d.termsHash) throw new Error("Hash điều khoản không khớp.");
   const terms = JSON.parse(d.termsJson);
-  if (terms.version !== 1 || String(terms.chainId) !== network.chainId || !sameAddress(terms.contract, network.contractAddress)
+  if (terms.version !== 2 || terms.standardTermsVersion !== d.standardTermsVersion || !terms.standardTermsHash || String(terms.chainId) !== network.chainId || !sameAddress(terms.contract, network.contractAddress)
     || terms.deploymentId !== d.deploymentId || terms.clientReference !== d.clientReference
     || !sameAddress(terms.buyer, d.buyer) || !sameAddress(terms.seller, d.seller) || !sameAddress(terms.arbiter, d.arbiter)
     || terms.amountWei !== d.amountWei || terms.description !== d.description || terms.acceptanceCriteria !== d.acceptanceCriteria
@@ -50,13 +50,16 @@ export function actions(view: OrderView, account: string, network: NetworkStatus
   const beforeReview = !!view.chain?.reviewDeadline && time <= view.chain.reviewDeadline;
   return {
     create: active && !view.chain && buyer && time < d.deliveryDeadline,
-    deposit: valid && state === "Created" && buyer && beforeDelivery,
+    accept: valid && state === "Created" && seller && beforeDelivery,
+    cancel: valid && (state === "Created" || state === "Accepted") && (buyer || seller),
+    deposit: valid && state === "Accepted" && buyer && beforeDelivery,
     deliver: valid && state === "Funded" && seller && beforeDelivery,
     confirm: valid && state === "Delivered" && buyer && beforeReview && view.deliveryFileMatchesChain,
     dispute: valid && (buyer || seller) && state === "Delivered" && beforeReview,
     refund: valid && state === "Funded" && buyer && !beforeDelivery,
     claim: valid && state === "Delivered" && seller && !beforeReview,
     resolve: valid && state === "Disputed" && arbiter,
+    timeout: valid && state === "Disputed" && (buyer || seller),
     product: valid && state === "Funded" && seller && beforeDelivery && !view.files.some(f => f.kind === "product"),
     evidence: valid && (buyer || seller) && ["Funded", "Delivered", "Disputed"].includes(state ?? "")
       && view.files.filter(f => f.kind === "evidence").length < 5

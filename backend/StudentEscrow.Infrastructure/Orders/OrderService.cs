@@ -45,8 +45,10 @@ public sealed class OrderService(StudentEscrowDbContext db, IWalletSignatureVeri
         OrderRules.Validate(request, clock.GetUtcNow().ToUnixTimeSeconds());
         var deployment = await Active(ct);
         var buyer = await Wallet(userId, ct);
-        var seller = addresses.NormalizeAddress(request.Seller);
+        var seller = (await Party(request.SellerEmail, deployment.ChainId, ct)).Address;
         var arbiter = addresses.NormalizeAddress(request.Arbiter);
+        if (!await db.Set<ChainArbiter>().AsNoTracking().AnyAsync(a => a.DeploymentId == deployment.Id && a.Address == arbiter && a.Approved, ct))
+            throw new ApplicationError("ARBITER_NOT_APPROVED", "Arbiter phải nằm trong danh sách do nền tảng quản lý.", 400);
         if (buyer.ChainId != deployment.ChainId || new[] { buyer.Address, seller, arbiter }.Distinct().Count() != 3
             || seller == deployment.ContractAddress || arbiter == deployment.ContractAddress)
             throw new ApplicationError("INVALID_PARTIES", "Use three different wallets on the configured chain.", 400);
@@ -54,11 +56,57 @@ public sealed class OrderService(StudentEscrowDbContext db, IWalletSignatureVeri
             Buyer = buyer.Address, Seller = seller, Arbiter = arbiter, AmountWei = request.AmountWei,
             Description = request.Description.Trim(), AcceptanceCriteria = request.AcceptanceCriteria.Trim(),
             DeliveryDeadline = request.DeliveryDeadline, ReviewWindow = request.ReviewWindow,
-            ClientReference = "0x" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)), CreatedAt = clock.GetUtcNow() };
+            ClientReference = "0x" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)), CreatedAt = clock.GetUtcNow(),
+            StandardTermsVersion = StandardTerms.Current.Version, BuyerAcceptedTermsAt = clock.GetUtcNow() };
         OrderRules.Seal(draft, deployment.ChainId, deployment.ContractAddress);
         db.Add(draft);
         await db.SaveChangesAsync(ct);
         return await View(draft, ct);
+    }
+    public async Task<PartyLookupResponse> FindPartyAsync(Guid userId, string email, CancellationToken ct)
+    {
+        var deployment = await Active(ct);
+        var party = await Party(email, deployment.ChainId, ct);
+        if (party.UserId == userId) throw new ApplicationError("INVALID_PARTIES", "Bạn không thể tự giao dịch với chính mình.", 400);
+        return new(party.FullName, Mask(party.Email), addresses.ChecksumAddress(party.Address));
+    }
+    private async Task<(Guid UserId, string FullName, string Email, string Address)> Party(string email, long chainId, CancellationToken ct)
+    {
+        var normalized = email.Trim().ToUpperInvariant();
+        var row = await (from user in db.Users.AsNoTracking()
+                         join link in db.WalletLinks.AsNoTracking() on user.Id equals link.UserId
+                         where user.NormalizedEmail == normalized && link.ChainId == chainId
+                         select new { user.Id, user.FullName, user.Email, link.Address }).SingleOrDefaultAsync(ct)
+            ?? throw new ApplicationError("PARTY_NOT_FOUND", "Không tìm thấy tài khoản có ví với email này.", 404);
+        return (row.Id, row.FullName, row.Email, row.Address);
+    }
+    // Enough for the other party to recognise an account, without handing out its full address.
+    private static string Mask(string email)
+    {
+        var at = email.IndexOf('@');
+        return at <= 0 ? "***" : email[..Math.Min(2, at)] + "***" + email[at..];
+    }
+    public async Task<IReadOnlyList<ArbiterResponse>> ArbitersAsync(CancellationToken ct)
+    {
+        var deployment = await Active(ct);
+        var rows = await (from arbiter in db.Set<ChainArbiter>().AsNoTracking()
+                          join link in db.WalletLinks.AsNoTracking() on arbiter.Address equals link.Address
+                          join user in db.Users.AsNoTracking() on link.UserId equals user.Id
+                          where arbiter.DeploymentId == deployment.Id && arbiter.Approved
+                          orderby user.FullName
+                          select new { user.FullName, arbiter.Address }).ToListAsync(ct);
+        return rows.Select(row => new ArbiterResponse(row.FullName, addresses.ChecksumAddress(row.Address))).ToList();
+    }
+    private async Task<OrderParties> Parties(OrderDraft draft, CancellationToken ct)
+    {
+        string[] wallets = [draft.Buyer, draft.Seller, draft.Arbiter];
+        var rows = await (from link in db.WalletLinks.AsNoTracking()
+                          join user in db.Users.AsNoTracking() on link.UserId equals user.Id
+                          where wallets.Contains(link.Address)
+                          select new { link.Address, user.FullName, user.Email }).ToListAsync(ct);
+        OrderParty? Find(string address) => rows.Where(row => row.Address == address)
+            .Select(row => new OrderParty(row.FullName, Mask(row.Email))).FirstOrDefault();
+        return new(Find(draft.Buyer), Find(draft.Seller), Find(draft.Arbiter));
     }
     public async Task<IReadOnlyList<OrderView>> ListAsync(Guid userId, int skip, CancellationToken ct)
     {
@@ -87,7 +135,8 @@ public sealed class OrderService(StudentEscrowDbContext db, IWalletSignatureVeri
             catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or System.Text.Json.JsonException) { status = "Unavailable"; }
         }
         return new(draft, chain, matches, status, deployment.LastBlock, deployment.CheckedAt, files,
-            matches && chain!.DeliveryHash is not null && files.Any(f => f.Kind == "product" && f.Sha256 == chain.DeliveryHash));
+            matches && chain!.DeliveryHash is not null && files.Any(f => f.Kind == "product" && f.Sha256 == chain.DeliveryHash),
+            await Parties(draft, ct));
     }
     public async Task<IReadOnlyList<ChainEvent>> HistoryAsync(Guid userId, Guid id, int skip, CancellationToken ct)
     {
@@ -125,7 +174,18 @@ public sealed class OrderService(StudentEscrowDbContext db, IWalletSignatureVeri
     }
     public async Task<OrderFile> DownloadAsync(Guid userId, Guid id, Guid fileId, CancellationToken ct)
     {
-        await Authorized(userId, id, ct);
-        return await db.Set<OrderFile>().AsNoTracking().SingleOrDefaultAsync(f => f.Id == fileId && f.DraftId == id, ct) ?? throw Missing();
+        var draft = await Authorized(userId, id, ct);
+        var file = await db.Set<OrderFile>().AsNoTracking().SingleOrDefaultAsync(f => f.Id == fileId && f.DraftId == id, ct) ?? throw Missing();
+        if (file.Kind == "product" && !await CanReadProduct(draft, (await Wallet(userId, ct)).Address, ct))
+            throw new ApplicationError("PRODUCT_NOT_DELIVERED", "Sản phẩm chỉ mở sau khi Seller xác nhận bàn giao trên blockchain.", 403);
+        return file;
+    }
+    // Otherwise a Buyer could take the uploaded product before delivery, then still refund or dispute the escrow.
+    private async Task<bool> CanReadProduct(OrderDraft draft, string address, CancellationToken ct)
+    {
+        if (address == draft.Seller) return true;
+        var chain = await db.Set<ChainOrder>().AsNoTracking().SingleOrDefaultAsync(o => o.DeploymentId == draft.DeploymentId
+            && o.Buyer == draft.Buyer && o.ClientReference == draft.ClientReference, ct);
+        return chain?.DeliveryHash is not null || (address == draft.Arbiter && chain?.State == "Disputed");
     }
 }

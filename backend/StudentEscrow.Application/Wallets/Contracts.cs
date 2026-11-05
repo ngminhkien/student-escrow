@@ -19,7 +19,23 @@ public sealed class WalletLinkRequest
 
 public sealed record WalletChallengeResponse(Guid ChallengeId, string Address, long ChainId,
     string Message, DateTimeOffset ExpiresAt);
-public sealed record WalletResponse(bool Linked, string? Address, long? ChainId, DateTimeOffset? LinkedAt);
+public sealed record WalletResponse(bool Linked, string? Address, long? ChainId, DateTimeOffset? LinkedAt, bool Custodial = false);
+
+public sealed record ExchangeRateResponse(long VndPerEth, long WeiPerVnd, bool Fixed);
+public sealed record LedgerEntryResponse(Guid Id, string Type, string AmountWei, string AmountVnd, string BalanceAfterWei,
+    string? OrderId, string? TransactionHash, string? Note, DateTimeOffset CreatedAt);
+public sealed record WalletAccountResponse(bool Custodial, string? Address, string BalanceWei, string BalanceVnd,
+    string LockedWei, string LockedVnd, long VndPerEth, IReadOnlyList<LedgerEntryResponse> Entries);
+
+public interface IWalletProvisioner
+{
+    Task EnsureAsync(Guid userId, CancellationToken cancellationToken);
+}
+
+public sealed class DisabledWalletProvisioner : IWalletProvisioner
+{
+    public Task EnsureAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
+}
 
 public sealed class WalletSettings
 {

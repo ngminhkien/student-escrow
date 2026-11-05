@@ -1,16 +1,19 @@
 # StudentEscrow Frontend — React + TypeScript + MetaMask
 
+> Khi đăng ký, người dùng chọn hệ thống giữ ví hộ hoặc tự giữ ví bằng MetaMask. Tài khoản chọn ví lưu ký không cần MetaMask, số tiền hiển thị bằng VND (1 ETH = 100.000.000 ₫). Các hướng dẫn MetaMask dưới đây chỉ áp dụng cho tài khoản liên kết ví tự giữ. Xem mục "Ví lưu ký, số dư và tỷ giá VND" ở README gốc.
+
 Giao diện ứng dụng với trang đăng nhập riêng, sidebar theo tài khoản, thẻ ví/số dư/gas và bố cục thích ứng điện thoại. React + TypeScript + Vite + ethers; không có UI framework. API và smart contract vẫn quyết định quyền/trạng thái. File ABI được import trực tiếp từ `blockchain/deployment/Escrow.abi.json`, không duy trì một bản ABI riêng.
 
 Thiết kế áp dụng skill local `ui-ux-pro-max` theo hướng Minimalism & Swiss Style, giới hạn bảng màu trắng/đen/xám theo yêu cầu. Quy tắc đã chọn nằm ở `design-system/studentescrow/MASTER.md`. Sidebar tối, vùng làm việc sáng, tổng quan tính từ các đơn đã tải; chi tiết đơn ưu tiên workflow, file và thao tác, với điều khoản ở cột phụ. Trang đăng nhập hỗ trợ hiện/ẩn mật khẩu, mã đơn có nút sao chép. CSS dùng token chung và không tải font hoặc thư viện giao diện bên ngoài.
 
 ## Đăng nhập, ví và giao diện theo tài khoản
 
-- `viego.hvnh@gmail.com` mở trang **Quản trị**, không có mục Đơn hàng. Các tài khoản khác mở **Đơn hàng**, không có mục Quản trị. Cả hai đều có Tài khoản & ví. Email được cấu hình trong `src/domain/access.ts`; đây là lựa chọn giao diện, không tự cấp quyền contract.
+- `viego.hvnh@gmail.com` mở trang **Quản trị**, có thêm mục **Phân xử** cho các đơn chọn Admin làm Arbiter, không tạo hay mua bán đơn. Các tài khoản khác mở **Đơn hàng**, không có mục Quản trị. Cả hai đều có Tài khoản & ví. Email được cấu hình trong `src/domain/access.ts`; đây là lựa chọn giao diện, không tự cấp quyền contract.
 - Sau đăng nhập hoặc khôi phục phiên, ứng dụng đọc ví đã liên kết từ API, tự yêu cầu kết nối MetaMask và chuyển về mạng local. Nếu sai ví, MetaMask mở hộp chọn tài khoản; người dùng phải chọn đúng địa chỉ được hiển thị. Website không thể âm thầm đổi ví hoặc thêm private key. Yêu cầu bị từ chối không được tự lặp; bấm **Đồng bộ ví** để thử lại.
 - Tài khoản chưa liên kết ví cần vào Tài khoản & ví, chọn ví và **Ký và liên kết ví** một lần. Không tự liên kết một địa chỉ đang chọn mà chưa có chữ ký xác nhận.
 - Khi chưa kết nối, sai ví, sai mạng hoặc đang kiểm tra ví, FE hiển thị cảnh báo kèm ví liên kết/ví hiện tại và khóa các nút trong đơn hàng, quản trị, lịch sử giao dịch và form KYC. Nội dung đã tải vẫn đọc được. Điều hướng, đăng xuất, đồng bộ và thiết lập ví vẫn hoạt động để khôi phục kết nối. Chọn đúng ví/mạng sẽ tự mở khóa; các điều kiện quyền contract và trạng thái đơn vẫn được kiểm tra riêng.
-- Thẻ ví đọc số dư ETH và giá gas mỗi 15 giây khi blockchain sẵn sàng. Giá gas (Gwei) không phải tổng phí giao dịch. Trước từng giao dịch, ứng dụng ước tính gas với dự phòng 20% và kiểm tra số dư đủ cho giá trị giao dịch cộng gas theo phí mạng hiện tại. MetaMask hiển thị phí cuối cùng trước khi người dùng xác nhận.
+- Màn hình tự cập nhật: FE hỏi `/api/health/blockchain` mỗi giây, và khi `lastIndexedBlock` đổi thì mọi màn hình tải lại ngay, giữ nguyên nội dung đang hiện trong lúc tải. Worker đọc chain mỗi giây (`Blockchain__PollSeconds`), nên thao tác của bên kia hiện ra sau khoảng 1–2 giây.
+- Thẻ ví đọc số dư ETH và giá gas mỗi 15 giây khi blockchain sẵn sàng, và ngay khi có block mới. Giá gas (Gwei) không phải tổng phí giao dịch. Trước từng giao dịch, ứng dụng ước tính gas với dự phòng 20% và kiểm tra số dư đủ cho giá trị giao dịch cộng gas theo phí mạng hiện tại. MetaMask hiển thị phí cuối cùng trước khi người dùng xác nhận.
 - Ví của tài khoản quản trị vẫn cần `KYC_ADMIN_ROLE` / `DEFAULT_ADMIN_ROLE` trên deployment hiện tại; hardcode email không cấp các quyền này. Luồng tự kết nối không gửi giao dịch hoặc ký thay người dùng.
 - Trước khi tạo đơn/nạp ETH, FE đọc `verifiedWallets` của Buyer và Seller trên contract hiện tại. Ví nào chưa được xác minh sẽ hiện ngay cạnh nút thao tác, kèm địa chỉ và hướng dẫn Admin xác minh; nút tạo/nạp bị khóa đến khi đủ điều kiện. Kiểm tra tự cập nhật mỗi 5 giây và có nút kiểm tra lại. Lỗi giao dịch hiển thị tại khu vực thao tác và được đưa vào vùng nhìn thấy, thay vì chỉ xuất hiện ở đầu trang. `Ready` là trạng thái worker, không phải trạng thái tạo đơn.
 - **Kiểm tra blockchain MetaMask** trên thẻ ví chỉ đọc chain ID và dữ liệu block, không mở yêu cầu ký. `127.0.0.1:5173` là website kết nối với extension; RPC mạng local cần là `http://127.0.0.1:8545`. Nếu hash theo số block không khớp (có thể do cache sau reset Hardhat), kiểm tra thêm block theo hash và `eth_getCode` với `{ blockHash, requireCanonical: true }` theo EIP-1898, rồi so sánh mã contract với RPC của API tại cùng block. Chỉ chấp nhận khi block canonical và mã contract khớp; không xác minh được thì vẫn chặn giao dịch. Kết quả chẩn đoán hiển thị hai hash để phân biệt cache và khác blockchain.
@@ -65,8 +68,8 @@ Mở **http://127.0.0.1:5173**, đăng nhập và xác nhận kết nối trong 
 1. Cài/mở khóa MetaMask trong trình duyệt, truy cập frontend và đăng nhập. Ứng dụng tự kiểm tra ví và mở yêu cầu kết nối khi cần.
 2. Xác nhận yêu cầu chuyển mạng local; nếu cần khai báo thủ công: RPC `http://127.0.0.1:8545`, chain ID **31337**, ký hiệu **ETH**.
 3. Import các private key **thử nghiệm** do terminal Hardhat in ra vào MetaMask. Chỉ nhập ở giao diện MetaMask, không nhập vào frontend/Swagger. Các key Hardhat là key công khai, chỉ dùng local.
-4. Gợi ý phân vai theo tài khoản node: **#0 Admin, #1 Buyer, #2 Seller, #3 Arbiter, #4 Platform**. Admin được cấp quyền bởi script deploy; không thể chọn vai trò Admin bằng cách đăng ký tài khoản trên web.
-5. Đăng ký ba tài khoản ứng dụng riêng cho Buyer, Seller, Arbiter. Mỗi tài khoản vào **Tài khoản & ví**, chọn đúng ví trong MetaMask và bấm **Ký và liên kết ví**. Mỗi tài khoản/ví chỉ liên kết một lần. Có thể thử KYC PASS/FAIL ở đây; KYC mock không tự xác minh on-chain.
+4. Gợi ý phân vai theo tài khoản node: **#0 Admin (kiêm ví nhận phí và ví nền tảng cấp ETH), #1 Buyer, #2 Seller, #3 Arbiter**. Admin được cấp quyền bởi script deploy; không thể chọn vai trò Admin bằng cách đăng ký tài khoản trên web.
+5. Đăng ký ba tài khoản ứng dụng riêng cho Buyer, Seller, Arbiter và chọn **Tự giữ ví bằng MetaMask**. Mỗi tài khoản vào **Tài khoản & ví**, chọn đúng ví trong MetaMask và bấm **Ký và liên kết ví**. Mỗi tài khoản/ví chỉ liên kết một lần. Có thể thử KYC PASS/FAIL ở đây; KYC mock không tự xác minh on-chain. Ví mới chưa có ETH thì dùng mục **Nạp tiền**: thanh toán VND qua cổng giả lập và nhận ETH thẳng vào ví, có mã giao dịch; phí gas trừ vào số ETH này nên hãy nạp dư một ít.
 
 Có thể dùng một trình duyệt và lần lượt đăng xuất/đăng nhập + đổi ví. Hoặc dùng nhiều profile/tab: phiên JWT lưu trong sessionStorage theo tab; chọn ví MetaMask có thể tác động các tab nên luôn xem cảnh báo đúng/sai ví trước khi ký. Ví đã liên kết trong SQL từ lần test trước thì tiếp tục dùng tài khoản đó; reset node không xóa liên kết SQL.
 
@@ -77,8 +80,9 @@ Có thể dùng một trình duyệt và lần lượt đăng xuất/đăng nh�
 | Bước | Tài khoản / ví | Thao tác và kết quả |
 |---|---|---|
 | 1 | Admin | Xác minh Buyer và Seller trên deployment hiện tại |
-| 2 | Buyer | Đơn hàng → Tạo bản nháp; nhập Seller, Arbiter, điều khoản, ETH, hạn giao và khoảng phản hồi |
-| 3 | Buyer | Mở draft → Tạo đơn trên chain → xác nhận MetaMask; chờ `Đã tạo trên chain` |
+| 1b | Buyer | Tài khoản & ví → Nạp tiền; nhập số tiền → Tiếp tục → Thanh toán thành công (cổng giả lập, không có tiền thật) |
+| 2 | Buyer | Đơn hàng → Tạo bản nháp; tìm Seller theo email, chọn Arbiter trong danh sách nền tảng, nhập nội dung, số tiền, hạn giao, khoảng phản hồi và tích đồng ý điều khoản (`demo-run.ps1` đặt sẵn Admin làm Arbiter mặc định; nếu tự deploy, Admin cần thêm Arbiter trước) |
+| 3 | Buyer, Seller | Buyer mở draft → Tạo đơn trên chain → xác nhận MetaMask. Seller mở đơn, đọc điều khoản, tích đồng ý → Chấp nhận đơn; chờ `Seller đã chấp nhận` rồi Buyer mới ký quỹ |
 | 4 | Buyer | Bấm Nạp ETH → xác nhận MetaMask; chờ `Đã ký quỹ` |
 | 5 | Seller | Đăng nhập/chọn đúng ví; vào Đơn tôi bán và mở cùng đơn (danh sách hoặc UUID Buyer gửi) |
 | 6 | Seller | Chọn ZIP mã nguồn → Tải ZIP mã nguồn; tích xác nhận ZIP hoàn chỉnh → Xác nhận đã gửi code → xác nhận giao dịch MetaMask |

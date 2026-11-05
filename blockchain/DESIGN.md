@@ -16,17 +16,22 @@ Order ID bắt đầu từ 1; ID 0 hoặc chưa tạo đều revert `OrderNotFou
 |---|---|---|
 | `setWalletVerified(wallet,bool)` | KYC_ADMIN_ROLE | Không zero/self; phát WalletVerificationUpdated |
 | `createOrder(seller,arbiter,amountWei,clientReference,termsHash,deliveryDeadline,reviewWindow)` | Buyer | Buyer/Seller verified, khác nhau; Arbiter không Buyer/Seller; địa chỉ không zero/self; tham số hợp lệ → Created |
-| `deposit(orderId)` payable | Buyer | Created, cả hai vẫn verified, đúng amount, timestamp <= deliveryDeadline → Funded |
+| `setArbiterApproved(arbiter,approved)` | DEFAULT_ADMIN_ROLE | Cập nhật danh sách Arbiter của nền tảng |
+| `acceptOrder(orderId)` | Seller | Created, Seller verified, Arbiter còn trong danh sách, timestamp <= deliveryDeadline → Accepted; sự kiện `OrderAccepted` gắn termsHash |
+| `cancelOrder(orderId)` | Buyer hoặc Seller | Created hoặc Accepted → Cancelled; không có tiền bị giữ |
+| `deposit(orderId)` payable | Buyer | Accepted, cả hai vẫn verified, Arbiter còn trong danh sách, đúng amount, timestamp <= deliveryDeadline → Funded |
 | `markDelivered(orderId,deliveryHash)` | Seller của đơn | Funded, hash khác 0, timestamp <= deliveryDeadline → Delivered; reviewDeadline = deliveredAt + reviewWindow |
 | `confirmReceipt(orderId)` | Buyer | Delivered, timestamp <= reviewDeadline → Completed |
-| `refundIfExpired(orderId)` | Buyer | Funded, timestamp > deliveryDeadline → Refunded |
+| `refundIfExpired(orderId)` | Bất kỳ ai (tiền chỉ về Buyer) | Funded, timestamp > deliveryDeadline → Refunded |
+| `claimDisputeTimeout(orderId)` | Bất kỳ ai | Disputed, timestamp > disputedAt + 30 ngày → Resolved, chia 50/50, phí 1% trên phần Seller |
+| `withdraw(to)` | Người có khoản chờ rút | Nhận khoản thanh toán đã bị từ chối lúc quyết toán |
 | `claimAfterReviewTimeout(orderId)` | Seller | Delivered, timestamp > reviewDeadline → Completed |
 | `raiseDispute(orderId)` | Buyer/Seller | Funded chưa quá hạn giao hoặc Delivered chưa quá hạn phản hồi → Disputed |
-| `resolveDispute(orderId,sellerShareBps)` | Arbiter của đơn | Disputed, share 0..10000 → Resolved |
+| `resolveDispute(orderId,sellerShareBps)` | Arbiter của đơn, còn trong danh sách | Disputed, share 0..10000 → Resolved |
 
-Created quá hạn vẫn Created, không tự refund. Disputed chặn mọi nhánh giải ngân/hoàn thường. Completed/Resolved/Refunded không chuyển tiếp. KYC chỉ chặn create/deposit; không khóa quyền xử lý tiền đã Funded.
+Created/Accepted quá hạn giữ nguyên trạng thái, không tự refund (chưa có tiền); một trong hai bên có thể hủy. Disputed chặn mọi nhánh giải ngân/hoàn thường. Completed/Resolved/Refunded không chuyển tiếp. KYC chỉ chặn create/deposit; không khóa quyền xử lý tiền đã Funded.
 
-Admin được cấp DEFAULT_ADMIN_ROLE và KYC_ADMIN_ROLE trong constructor. Có thể grant/revoke KYC role bằng AccessControl; Admin không mặc nhiên là Arbiter. Không có hàm rút tiền của Admin, đổi phí hay Platform. Platform có thể trùng ví một bên, nhưng quyền của nó vẫn đến từ vai trò cụ thể trong đơn; script demo dùng các ví riêng.
+Admin được cấp DEFAULT_ADMIN_ROLE và KYC_ADMIN_ROLE trong constructor. Có thể grant/revoke KYC role bằng AccessControl; Admin không mặc nhiên là Arbiter. Không có hàm rút tiền của Admin, đổi phí hay Platform. Platform có thể trùng ví một bên, nhưng quyền của nó vẫn đến từ vai trò cụ thể trong đơn; script deploy local đặt Platform trùng ví Admin. Phí và gas Admin trả cùng làm đổi số dư ví này, nên đối soát phí phải dựa trên event `Released`/`Resolved`, không dựa trên số dư.
 
 ## Event phục vụ phần 04/05
 
@@ -57,7 +62,7 @@ refund + fee + net = amountWei
 
 Confirm/claim dùng share=10000; refund dùng share=0 và phí=0; resolve dùng share Arbiter chọn. Phần dư tỷ lệ thuộc Buyer. Gas do caller trả riêng. `totalLockedWei` tăng đúng amount khi deposit, giảm đúng amount khi quyết toán. Không đơn này chi tiêu khoản khóa của đơn khác; locked <= contract balance, không ép bằng nhau vì có thể nhận ETH cưỡng bức. Contract không có receive/fallback nhận ETH tự do.
 
-Quyết toán kiểm tra quyền/state ở hàm public, cập nhật state/locked trước khi external call và có nonReentrant. Recipient từ chối ETH → tất cả chuyển tiền/state/log revert; không quyết toán một phần. Guard chặn cả deposit lồng trong callback của settlement. Các hàm không chuyển tiền vẫn kiểm tra quyền/state riêng.
+Quyết toán kiểm tra quyền/state ở hàm public, cập nhật state/locked trước khi external call và có nonReentrant. Mỗi khoản được đẩy với tối đa 100.000 gas; người nhận từ chối ETH hoặc đốt gas không chặn được các bên còn lại, khoản đó chuyển vào `pendingWithdrawals` (sự kiện `PayoutDeferred`) để tự rút bằng `withdraw(to)`.
 
 ## Định danh deployment
 

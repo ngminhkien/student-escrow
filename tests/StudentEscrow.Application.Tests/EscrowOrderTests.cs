@@ -33,6 +33,32 @@ public sealed class EscrowOrderTests
         draft.AcceptanceCriteria = "New terms";
         OrderRules.Seal(draft, 31337, Fixtures.Contract);
         Assert.NotEqual(hash, draft.TermsHash);
+        hash = draft.TermsHash;
+        draft.StandardTermsVersion = StandardTerms.Current.Version;
+        OrderRules.Seal(draft, 31337, Fixtures.Contract);
+        Assert.NotEqual(hash, draft.TermsHash);
+        Assert.Contains(StandardTerms.Current.Hash, draft.TermsJson);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("2020-01-v0")]
+    public void CreatingADraftRequiresConsentToTheCurrentTerms(string version)
+    {
+        var error = Assert.Throws<ApplicationError>(() => OrderRules.Validate(new() { Description = "Landing page", AcceptanceCriteria = "375/1440 px",
+            AmountWei = "1000", DeliveryDeadline = 200, ReviewWindow = 300, AcceptedTermsVersion = version }, 100));
+        Assert.Equal("TERMS_NOT_ACCEPTED", error.Code);
+        OrderRules.Validate(new() { Description = "Landing page", AcceptanceCriteria = "375/1440 px", AmountWei = "1000",
+            DeliveryDeadline = 200, ReviewWindow = 300, AcceptedTermsVersion = StandardTerms.Current.Version }, 100);
+    }
+
+    [Fact]
+    public void PublishedTermsResolveByVersionAndUnknownVersionsDoNot()
+    {
+        Assert.Same(StandardTerms.Current, StandardTerms.Find(StandardTerms.Current.Version));
+        Assert.Null(StandardTerms.Find("unknown"));
+        Assert.Null(StandardTerms.Find(null));
+        Assert.Equal(OrderRules.Hash(Encoding.UTF8.GetBytes(StandardTerms.Current.Text)), StandardTerms.Current.Hash);
     }
 
     [Fact]
@@ -95,13 +121,53 @@ public sealed class EscrowOrderTests
         Assert.Equal("Created", order.State);
         void Apply(RpcLog log) => EscrowProjector.Apply(EscrowProjector.Decode(dep, log)!, order);
         Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Delivered(2, Fixtures.Hash(2))));
+        // Money cannot be locked before the Seller accepts.
+        Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Deposited(2, Fixtures.Hash(2))));
+        Apply(Fixtures.Accepted(2, Fixtures.Hash(2)));
+        Assert.Equal("Accepted", order.State);
+        Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Accepted(2, Fixtures.Hash(2))));
         Apply(Fixtures.Deposited(2, Fixtures.Hash(2)));
+        Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Cancelled(3, Fixtures.Hash(3))));
         Apply(Fixtures.Delivered(3, Fixtures.Hash(3)));
         Apply(Fixtures.Released(4, Fixtures.Hash(4)));
         Assert.Equal("Completed", order.State);
         Assert.Equal("990", order.SellerNetWei);
         Assert.Equal("10", order.PlatformFeeWei);
         Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Released(5, Fixtures.Hash(5))));
+    }
+
+    [Fact]
+    public void SellerAcceptanceMustBindTheOrdersTermsHash()
+    {
+        var dep = Guid.NewGuid();
+        var order = EscrowProjector.Apply(EscrowProjector.Decode(dep, Fixtures.Created(1, Fixtures.Hash(1)))!, null);
+        Assert.Throws<InvalidDataException>(() => EscrowProjector.Apply(EscrowProjector.Decode(dep, Fixtures.Accepted(2, Fixtures.Hash(2), terms: 78))!, order));
+        Assert.Equal("Created", order.State);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EitherStateBeforeFundingCanBeCancelledAndCancelledIsFinal(bool accepted)
+    {
+        var dep = Guid.NewGuid();
+        var order = EscrowProjector.Apply(EscrowProjector.Decode(dep, Fixtures.Created(1, Fixtures.Hash(1)))!, null);
+        void Apply(RpcLog log) => EscrowProjector.Apply(EscrowProjector.Decode(dep, log)!, order);
+        if (accepted) Apply(Fixtures.Accepted(2, Fixtures.Hash(2)));
+        Apply(Fixtures.Cancelled(3, Fixtures.Hash(3)));
+        Assert.Equal("Cancelled", order.State);
+        Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Accepted(4, Fixtures.Hash(4))));
+        Assert.Throws<InvalidDataException>(() => Apply(Fixtures.Deposited(4, Fixtures.Hash(4))));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ArbiterEventsDecodeWithoutAnOrder(bool approved)
+    {
+        var ev = EscrowProjector.Decode(Guid.NewGuid(), Fixtures.ArbiterApproval(1, Fixtures.Hash(1), approved))!;
+        Assert.Null(ev.OrderId);
+        Assert.Equal((Fixtures.Arbiter, approved), EscrowProjector.ArbiterChange(ev));
     }
 
     [Fact]
@@ -146,6 +212,12 @@ internal static class Fixtures
         "0x" + Address(Seller) + Address(Arbiter) + Word(1000) + Word(100) + Word(77) + Word(2000000000) + Word(300), false);
     private static RpcLog Event(string signature, long block, string hash, params int[] words) => new(block, hash,
         Hash(100 + (int)block), 0, Contract, [EscrowProjector.Topic(signature), Hash(1)], "0x" + string.Concat(words.Select(Word)), false);
+    public static RpcLog Accepted(long block, string hash, int terms = 77) => new(block, hash, Hash(100 + (int)block), 0, Contract,
+        [EscrowProjector.Topic("OrderAccepted(uint256,address,bytes32)"), Hash(1), "0x" + Address(Seller)], "0x" + Word(terms), false);
+    public static RpcLog Cancelled(long block, string hash) => new(block, hash, Hash(100 + (int)block), 0, Contract,
+        [EscrowProjector.Topic("OrderCancelled(uint256,address)"), Hash(1), "0x" + Address(Buyer)], "0x", false);
+    public static RpcLog ArbiterApproval(long block, string hash, bool approved) => new(block, hash, Hash(100 + (int)block), 0, Contract,
+        [EscrowProjector.Topic("ArbiterApprovalUpdated(address,bool)"), "0x" + Address(Arbiter)], "0x" + Word(approved ? 1 : 0), false);
     public static RpcLog Deposited(long block, string hash) => Event("Deposited(uint256,uint256)", block, hash, 1000);
     public static RpcLog Delivered(long block, string hash) => Event("Delivered(uint256,bytes32,uint256,uint256)", block, hash, 55, 1000, 1300);
     public static RpcLog Released(long block, string hash) => Event("Released(uint256,uint256,uint256,uint256)", block, hash, 1000, 990, 10);

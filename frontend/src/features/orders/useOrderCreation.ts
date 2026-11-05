@@ -40,7 +40,7 @@ export function useOrderCreation(draft: Draft, network: NetworkStatus, indexed: 
     }
     void refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [key, draft.buyer, draft.clientReference, draft.deploymentId, network.status, network.deploymentId, network.contractAddress, indexed, current?.hash, revision, save]);
+  }, [key, draft.buyer, draft.clientReference, draft.deploymentId, network.status, network.deploymentId, network.contractAddress, network.lastIndexedBlock, indexed, current?.hash, revision, save]);
   const track = useCallback((transaction: TxRecord) => {
     if (transaction.phase === "failed" || transaction.phase === "cancelled") save(null);
     else save({ hash: transaction.hash, phase: transaction.phase === "confirmed" ? "confirmed" : transaction.phase === "unknown" ? "unknown" : "pending" });

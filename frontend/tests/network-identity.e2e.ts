@@ -23,7 +23,7 @@ for (const mode of ["cached", "different"] as const) test(`mocked MetaMask diagn
       throw new Error(`Unexpected wallet request ${method}`);
     } };
   }, { account, hash, oldHash, mode });
-  await page.route("**/api/**", route => route.fulfill({ json: route.request().url().includes("/wallets/me") ? { linked: true, address: account, chainId: 31337 } : { status: "Ready", chainId: "31337", deploymentId: "diagnostic", deploymentBlock: 1, deploymentBlockHash: hash, contractAddress: "0x4444444444444444444444444444444444444444" } }));
+  await page.route("**/api/**", route => route.fulfill({ json: route.request().url().includes("/admin/accounts") ? { accounts: [], ledgerTotalWei: "0", ledgerTotalVnd: "0", treasuryWei: "0", contractWei: "0" } : route.request().url().includes("/wallets/me") ? { linked: true, address: account, chainId: 31337 } : { status: "Ready", chainId: "31337", deploymentId: "diagnostic", deploymentBlock: 1, deploymentBlockHash: hash, contractAddress: "0x4444444444444444444444444444444444444444" } }));
   await page.route("**/rpc", route => {
     const input = route.request().postDataJSON();
     const answer = (r: any) => ({ jsonrpc: "2.0", id: r.id, result: r.method === "eth_chainId" ? "0x7a69" : r.method === "eth_getCode" ? "0x6001" : r.method === "eth_call" ? "0x" + "0".repeat(63) + "1" : r.method === "eth_getBalance" || r.method === "eth_gasPrice" ? "0x1" : { timestamp: "0x6553f100" } });

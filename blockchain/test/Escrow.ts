@@ -3,7 +3,7 @@ import { describe, it, type TestContext } from "node:test";
 import { network } from "hardhat";
 import { ZeroAddress, ZeroHash, id, parseEther, sha256, toUtf8Bytes } from "ethers";
 
-const State = { Created: 0n, Funded: 1n, Delivered: 2n, Completed: 3n, Disputed: 4n, Resolved: 5n, Refunded: 6n };
+const State = { Created: 0n, Funded: 1n, Delivered: 2n, Completed: 3n, Disputed: 4n, Resolved: 5n, Refunded: 6n, Accepted: 7n, Cancelled: 8n };
 const amount = parseEther("0.01");
 const fileHash = sha256(toUtf8Bytes("demo file bytes"));
 
@@ -19,6 +19,7 @@ async function fixture(t: TestContext, receiverFee = false) {
   for (const wallet of [buyer.address, seller.address, otherBuyer.address, await receiver.getAddress()]) {
     await (await escrow.setWalletVerified(wallet, true)).wait();
   }
+  await (await escrow.setArbiterApproved(arbiter.address, true)).wait();
   const balance = async (address: string) => BigInt(await provider.request({ method: "eth_getBalance", params: [address, "latest"] }) as string);
   const now = async () => Number((await ethers.provider.getBlock("latest"))!.timestamp);
   const next = async (timestamp: number | bigint) => { await provider.request({ method: "evm_setNextBlockTimestamp", params: [Number(timestamp)] }); };
@@ -33,8 +34,18 @@ async function fixture(t: TestContext, receiverFee = false) {
     await (await escrow.connect(signer).createOrder(...await args(changes))).wait();
     return orderId as bigint;
   };
+  const accept = async (orderId: bigint) => {
+    const order = await escrow.getOrder(orderId);
+    if (order.seller === await receiver.getAddress()) await (await receiver.execute(await escrow.getAddress(), escrow.interface.encodeFunctionData("acceptOrder", [orderId]))).wait();
+    else await (await escrow.connect(seller).acceptOrder(orderId)).wait();
+  };
+  const accepted = async (changes: Record<string, unknown> = {}, signer = buyer) => {
+    const orderId = await create(changes, signer);
+    await accept(orderId);
+    return orderId;
+  };
   const funded = async (changes: Record<string, unknown> = {}) => {
-    const orderId = await create(changes);
+    const orderId = await accepted(changes);
     const order = await escrow.getOrder(orderId);
     await (await escrow.connect(buyer).deposit(orderId, { value: order.amountWei })).wait();
     return orderId;
@@ -47,7 +58,7 @@ async function fixture(t: TestContext, receiverFee = false) {
   const events = (receipt: any, name: string) => receipt.logs.flatMap((log: any) => {
     try { const event = escrow.interface.parseLog(log); return event?.name === name ? [event.args] : []; } catch { return []; }
   });
-  return { ethers, provider, escrow, receiver, admin, buyer, seller, arbiter, platform, outsider, otherBuyer, balance, now, next, move, args, create, funded, delivered, events };
+  return { ethers, provider, escrow, receiver, admin, buyer, seller, arbiter, platform, outsider, otherBuyer, balance, now, next, move, args, create, accept, accepted, funded, delivered, events };
 }
 
 async function reverts(call: Promise<unknown>, contract: any, name: string) {
@@ -170,12 +181,12 @@ describe("Order creation and immutable terms", () => {
 
 describe("Funding and delivery", () => {
   for (const value of [0n, amount - 1n, amount + 1n]) it(`rejects incorrect deposit ${value}`, async t => {
-    const f = await fixture(t); const orderId = await f.create();
+    const f = await fixture(t); const orderId = await f.accepted();
     await reverts(f.escrow.connect(f.buyer).deposit.staticCall(orderId, { value }), f.escrow, "IncorrectDeposit");
     assert.equal(await f.escrow.totalLockedWei(), 0n);
   });
   it("only Buyer can deposit, only once; emitted amount and locked balance match", async t => {
-    const f = await fixture(t); const orderId = await f.create();
+    const f = await fixture(t); const orderId = await f.accepted();
     await reverts(f.escrow.connect(f.seller).deposit.staticCall(orderId, { value: amount }), f.escrow, "Unauthorized");
     const receipt = await (await f.escrow.connect(f.buyer).deposit(orderId, { value: amount })).wait();
     assert.deepEqual([...f.events(receipt, "Deposited")[0]], [orderId, amount]);
@@ -185,25 +196,25 @@ describe("Funding and delivery", () => {
     await reverts(f.escrow.connect(f.buyer).deposit.staticCall(orderId, { value: amount }), f.escrow, "InvalidState");
   });
   for (const party of ["buyer", "seller"] as const) it(`rechecks ${party} KYC before funding`, async t => {
-    const f = await fixture(t); const orderId = await f.create();
+    const f = await fixture(t); const orderId = await f.accepted();
     await (await f.escrow.setWalletVerified(f[party].address, false)).wait();
     await reverts(f.escrow.connect(f.buyer).deposit.staticCall(orderId, { value: amount }), f.escrow, "WalletNotVerified");
   });
   it("permits deposit exactly at delivery deadline", async t => {
-    const f = await fixture(t); const orderId = await f.create();
+    const f = await fixture(t); const orderId = await f.accepted();
     await f.next((await f.escrow.getOrder(orderId)).deliveryDeadline);
     await (await f.escrow.connect(f.buyer).deposit(orderId, { value: amount })).wait();
     assert.equal((await f.escrow.getOrder(orderId)).state, State.Funded);
   });
-  it("expired unfunded orders remain Created and cannot be funded or refunded", async t => {
-    const f = await fixture(t); const orderId = await f.create();
+  it("expired unfunded orders stay Accepted and cannot be funded or refunded", async t => {
+    const f = await fixture(t); const orderId = await f.accepted();
     await f.move((await f.escrow.getOrder(orderId)).deliveryDeadline + 1n);
     await reverts(f.escrow.connect(f.buyer).deposit.staticCall(orderId, { value: amount }), f.escrow, "DeadlinePassed");
     await reverts(f.escrow.connect(f.buyer).refundIfExpired.staticCall(orderId), f.escrow, "InvalidState");
-    assert.equal((await f.escrow.getOrder(orderId)).state, State.Created);
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Accepted);
   });
   it("only Seller delivers a funded order with a nonzero file hash, once", async t => {
-    const f = await fixture(t); const orderId = await f.create();
+    const f = await fixture(t); const orderId = await f.accepted();
     await reverts(f.escrow.connect(f.seller).markDelivered.staticCall(orderId, fileHash), f.escrow, "InvalidState");
     await (await f.escrow.connect(f.buyer).deposit(orderId, { value: amount })).wait();
     await reverts(f.escrow.connect(f.buyer).markDelivered.staticCall(orderId, fileHash), f.escrow, "Unauthorized");
@@ -269,16 +280,15 @@ describe("Release, refunds and review timeout", () => {
     assert.equal((await f.escrow.getOrder(orderId)).state, State.Completed);
     assert.equal(f.events(receipt, "Released").length, 1);
   });
-  it("only Buyer refunds strictly after delivery deadline; refund has zero fee", async t => {
+  it("anyone can trigger the refund strictly after delivery deadline; only Buyer is paid, with zero fee", async t => {
     const f = await fixture(t); const orderId = await f.funded();
     const deadline = (await f.escrow.getOrder(orderId)).deliveryDeadline;
     await f.move(deadline);
     await reverts(f.escrow.connect(f.buyer).refundIfExpired.staticCall(orderId), f.escrow, "DeadlineNotPassed");
     await f.move(deadline + 1n);
-    await reverts(f.escrow.connect(f.seller).refundIfExpired.staticCall(orderId), f.escrow, "Unauthorized");
     const buyerBefore = await f.balance(f.buyer.address), feeBefore = await f.balance(f.platform.address);
-    const receipt = await (await f.escrow.connect(f.buyer).refundIfExpired(orderId)).wait();
-    assert.equal(await f.balance(f.buyer.address) - buyerBefore + receipt.fee, amount);
+    const receipt = await (await f.escrow.connect(f.outsider).refundIfExpired(orderId)).wait();
+    assert.equal(await f.balance(f.buyer.address) - buyerBefore, amount);
     assert.equal(await f.balance(f.platform.address), feeBefore);
     assert.deepEqual([...f.events(receipt, "Refunded")[0]], [orderId, amount]);
     assert.equal((await f.escrow.getOrder(orderId)).state, State.Refunded);
@@ -313,6 +323,7 @@ describe("Disputes and conservation of wei", () => {
     const f = await fixture(t); const orderId = await f.create();
     await reverts(f.escrow.connect(f.buyer).raiseDispute.staticCall(orderId), f.escrow, "InvalidState");
     await reverts(f.escrow.connect(f.arbiter).resolveDispute.staticCall(orderId, 7000), f.escrow, "InvalidState");
+    await f.accept(orderId);
     await (await f.escrow.connect(f.buyer).deposit(orderId, { value: amount })).wait();
     await reverts(f.escrow.connect(f.outsider).raiseDispute.staticCall(orderId), f.escrow, "Unauthorized");
   });
@@ -365,6 +376,127 @@ describe("Disputes and conservation of wei", () => {
       assert.equal(await f.escrow.totalLockedWei(), 0n);
       assert.equal(await f.balance(await f.escrow.getAddress()), 0n);
     }
+  });
+});
+
+describe("Platform-managed Arbiters", () => {
+  it("only the default admin manages the list; a KYC admin cannot appoint an Arbiter", async t => {
+    const f = await fixture(t);
+    await (await f.escrow.grantRole(await f.escrow.KYC_ADMIN_ROLE(), f.outsider.address)).wait();
+    for (const caller of [f.buyer, f.seller, f.arbiter, f.outsider]) {
+      await reverts(f.escrow.connect(caller).setArbiterApproved.staticCall(f.outsider.address, true), f.escrow, "AccessControlUnauthorizedAccount");
+    }
+    const receipt = await (await f.escrow.setArbiterApproved(f.outsider.address, true)).wait();
+    assert.deepEqual([...f.events(receipt, "ArbiterApprovalUpdated")[0]], [f.outsider.address, true]);
+    assert.equal(await f.escrow.approvedArbiters(f.outsider.address), true);
+    await (await f.escrow.setArbiterApproved(f.outsider.address, false)).wait();
+    assert.equal(await f.escrow.approvedArbiters(f.outsider.address), false);
+  });
+  it("rejects zero and escrow addresses", async t => {
+    const f = await fixture(t);
+    for (const address of [ZeroAddress, await f.escrow.getAddress()]) await reverts(f.escrow.setArbiterApproved.staticCall(address, true), f.escrow, "InvalidAddress");
+  });
+  it("a Buyer cannot name an accomplice outside the list", async t => {
+    const f = await fixture(t);
+    await reverts(f.escrow.connect(f.buyer).createOrder.staticCall(...await f.args({ arbiter: f.outsider.address })), f.escrow, "ArbiterNotApproved");
+  });
+  it("removing an Arbiter blocks acceptance and funding of its pending orders", async t => {
+    const f = await fixture(t);
+    const created = await f.create(), accepted = await f.accepted({ reference: id("draft-2") });
+    await (await f.escrow.setArbiterApproved(f.arbiter.address, false)).wait();
+    await reverts(f.escrow.connect(f.seller).acceptOrder.staticCall(created), f.escrow, "ArbiterNotApproved");
+    await reverts(f.escrow.connect(f.buyer).deposit.staticCall(accepted, { value: amount }), f.escrow, "ArbiterNotApproved");
+  });
+  it("a removed Arbiter cannot rule; the dispute timeout still releases the funds", async t => {
+    const f = await fixture(t); const orderId = await f.funded();
+    await (await f.escrow.connect(f.buyer).raiseDispute(orderId)).wait();
+    await (await f.escrow.setArbiterApproved(f.arbiter.address, false)).wait();
+    await reverts(f.escrow.connect(f.arbiter).resolveDispute.staticCall(orderId, 10000), f.escrow, "ArbiterNotApproved");
+    const order = await f.escrow.getOrder(orderId);
+    await f.move(order.disputedAt + 30n * 24n * 3600n + 1n);
+    await (await f.escrow.connect(f.outsider).claimDisputeTimeout(orderId)).wait();
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Resolved);
+    assert.equal(await f.escrow.totalLockedWei(), 0n);
+  });
+});
+
+describe("Seller acceptance and cancellation", () => {
+  it("a Buyer cannot lock funds before the Seller accepts", async t => {
+    const f = await fixture(t); const orderId = await f.create();
+    await reverts(f.escrow.connect(f.buyer).deposit.staticCall(orderId, { value: amount }), f.escrow, "InvalidState");
+    assert.equal(await f.escrow.totalLockedWei(), 0n);
+  });
+  it("only the Seller accepts, once, and the event binds the terms hash", async t => {
+    const f = await fixture(t); const orderId = await f.create();
+    for (const caller of [f.buyer, f.arbiter, f.outsider]) await reverts(f.escrow.connect(caller).acceptOrder.staticCall(orderId), f.escrow, "Unauthorized");
+    const receipt = await (await f.escrow.connect(f.seller).acceptOrder(orderId)).wait();
+    const order = await f.escrow.getOrder(orderId);
+    assert.equal(order.state, State.Accepted);
+    assert.deepEqual([...f.events(receipt, "OrderAccepted")[0]], [orderId, f.seller.address, order.termsHash]);
+    await reverts(f.escrow.connect(f.seller).acceptOrder.staticCall(orderId), f.escrow, "InvalidState");
+  });
+  it("rejects acceptance of an unknown order, after the deadline, or by an unverified Seller", async t => {
+    const f = await fixture(t);
+    await reverts(f.escrow.connect(f.seller).acceptOrder.staticCall(999n), f.escrow, "OrderNotFound");
+    const orderId = await f.create();
+    await (await f.escrow.setWalletVerified(f.seller.address, false)).wait();
+    await reverts(f.escrow.connect(f.seller).acceptOrder.staticCall(orderId), f.escrow, "WalletNotVerified");
+    await (await f.escrow.setWalletVerified(f.seller.address, true)).wait();
+    await f.move((await f.escrow.getOrder(orderId)).deliveryDeadline + 1n);
+    await reverts(f.escrow.connect(f.seller).acceptOrder.staticCall(orderId), f.escrow, "DeadlinePassed");
+  });
+  for (const stage of ["Created", "Accepted"] as const) for (const party of ["buyer", "seller"] as const) it(`${party} can cancel a ${stage} order and nothing moves`, async t => {
+    const f = await fixture(t); const orderId = stage === "Created" ? await f.create() : await f.accepted();
+    const receipt = await (await f.escrow.connect(f[party]).cancelOrder(orderId)).wait();
+    assert.deepEqual([...f.events(receipt, "OrderCancelled")[0]], [orderId, f[party].address]);
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Cancelled);
+    assert.equal(await f.escrow.totalLockedWei(), 0n);
+    await reverts(f.escrow.connect(f.seller).acceptOrder.staticCall(orderId), f.escrow, "InvalidState");
+    await reverts(f.escrow.connect(f.buyer).deposit.staticCall(orderId, { value: amount }), f.escrow, "InvalidState");
+    await reverts(f.escrow.connect(f[party]).cancelOrder.staticCall(orderId), f.escrow, "InvalidState");
+  });
+  it("outsiders and the Arbiter cannot cancel; funded orders cannot be cancelled", async t => {
+    const f = await fixture(t); const orderId = await f.create();
+    for (const caller of [f.arbiter, f.outsider]) await reverts(f.escrow.connect(caller).cancelOrder.staticCall(orderId), f.escrow, "Unauthorized");
+    const funded = await f.funded({ reference: id("draft-2") });
+    await reverts(f.escrow.connect(f.buyer).cancelOrder.staticCall(funded), f.escrow, "InvalidState");
+    await reverts(f.escrow.connect(f.seller).cancelOrder.staticCall(funded), f.escrow, "InvalidState");
+    assert.equal(await f.escrow.totalLockedWei(), amount);
+  });
+});
+
+describe("Dispute timeout", () => {
+  const timeout = 30n * 24n * 3600n;
+  it("nobody can claim before the timeout, anyone can after; funds split evenly with fee on Seller's half", async t => {
+    const f = await fixture(t); const orderId = await f.funded();
+    const dispute = await (await f.escrow.connect(f.buyer).raiseDispute(orderId)).wait();
+    const disputedAt = BigInt((await f.ethers.provider.getBlock(dispute.blockNumber))!.timestamp);
+    assert.equal((await f.escrow.getOrder(orderId)).disputedAt, disputedAt);
+    await f.move(disputedAt + timeout);
+    await reverts(f.escrow.connect(f.outsider).claimDisputeTimeout.staticCall(orderId), f.escrow, "DeadlineNotPassed");
+    await f.move(disputedAt + timeout + 1n);
+    const before = await Promise.all([f.buyer.address, f.seller.address, f.platform.address].map(f.balance));
+    const receipt = await (await f.escrow.connect(f.outsider).claimDisputeTimeout(orderId)).wait();
+    const after = await Promise.all([f.buyer.address, f.seller.address, f.platform.address].map(f.balance));
+    const half = amount / 2n, fee = half / 100n;
+    assert.deepEqual([after[0] - before[0], after[1] - before[1], after[2] - before[2]], [amount - half, half - fee, fee]);
+    assert.deepEqual([...f.events(receipt, "Resolved")[0]], [orderId, amount - half, half, half - fee, fee]);
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Resolved);
+    assert.equal(await f.escrow.totalLockedWei(), 0n);
+    await reverts(f.escrow.connect(f.outsider).claimDisputeTimeout.staticCall(orderId), f.escrow, "InvalidState");
+  });
+  it("Arbiter can still decide after the timeout until someone claims it", async t => {
+    const f = await fixture(t); const orderId = await f.funded();
+    const dispute = await (await f.escrow.connect(f.seller).raiseDispute(orderId)).wait();
+    await f.move(BigInt((await f.ethers.provider.getBlock(dispute.blockNumber))!.timestamp) + timeout + 1n);
+    await (await f.escrow.connect(f.arbiter).resolveDispute(orderId, 10000)).wait();
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Resolved);
+    await reverts(f.escrow.claimDisputeTimeout.staticCall(orderId), f.escrow, "InvalidState");
+  });
+  it("only a Disputed order can use the timeout", async t => {
+    const f = await fixture(t); const orderId = await f.funded();
+    await reverts(f.escrow.claimDisputeTimeout.staticCall(orderId), f.escrow, "InvalidState");
+    await reverts(f.escrow.claimDisputeTimeout.staticCall(999n), f.escrow, "OrderNotFound");
   });
 });
 
@@ -431,33 +563,67 @@ describe("Terminal states, KYC revocation and isolation", () => {
     await (await f.escrow.connect(f.buyer).confirmReceipt(orderId)).wait();
     assert.equal(await f.balance(address), 123n);
     assert.equal(await f.escrow.totalLockedWei(), 0n);
-    assert.equal(f.escrow.interface.hasFunction("withdraw"), false);
+    // withdraw() only pays a recipient's own deferred payout; surplus ETH grants the admin nothing.
+    await reverts(f.escrow.connect(f.admin).withdraw.staticCall(f.admin.address), f.escrow, "NothingToWithdraw");
   });
 });
 
 describe("Recipient rejection and reentrancy", () => {
-  for (const recipient of ["buyer", "seller", "platform"] as const) it(`a refusing ${recipient} rolls back all payout, state, lock and events`, async t => {
+  for (const recipient of ["buyer", "seller", "platform"] as const) it(`a refusing ${recipient} cannot block settlement and can withdraw later`, async t => {
     const f = await fixture(t, recipient === "platform");
     const receiverAddress = await f.receiver.getAddress();
     let orderId: bigint;
     if (recipient === "buyer") {
       orderId = await f.escrow.nextOrderId();
       await (await f.receiver.execute(await f.escrow.getAddress(), f.escrow.interface.encodeFunctionData("createOrder", await f.args()))).wait();
+      await f.accept(orderId);
       await (await f.receiver.execute(await f.escrow.getAddress(), f.escrow.interface.encodeFunctionData("deposit", [orderId]), { value: amount })).wait();
     } else orderId = await f.funded(recipient === "seller" ? { seller: receiverAddress } : {});
     await (await f.escrow.connect(recipient === "buyer" ? f.seller : f.buyer).raiseDispute(orderId)).wait();
     await (await f.receiver.configure(true, ZeroAddress, "0x")).wait();
-    const addresses = [f.buyer.address, f.seller.address, f.platform.address, receiverAddress, await f.escrow.getAddress()];
-    const before = await Promise.all(addresses.map(f.balance));
-    // Send an actual mined reverting tx, rather than merely rejecting gas estimation.
-    await assert.rejects(async () => { await (await f.escrow.connect(f.arbiter).resolveDispute(orderId, 7000, { gasLimit: 1000000 })).wait(); });
-    assert.deepEqual(await Promise.all(addresses.map(f.balance)), before);
-    assert.equal((await f.escrow.getOrder(orderId)).state, State.Disputed);
-    assert.equal(await f.escrow.totalLockedWei(), amount);
-    assert.equal((await f.escrow.queryFilter(f.escrow.filters.Resolved(orderId))).length, 0);
-    await (await f.receiver.configure(false, ZeroAddress, "0x")).wait();
-    await (await f.escrow.connect(f.arbiter).resolveDispute(orderId, 7000)).wait();
+    const gross = amount * 7000n / 10000n, fee = gross / 100n;
+    const expected = recipient === "buyer" ? amount - gross : recipient === "seller" ? gross - fee : fee;
+    const receipt = await (await f.escrow.connect(f.arbiter).resolveDispute(orderId, 7000)).wait();
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Resolved);
     assert.equal(await f.escrow.totalLockedWei(), 0n);
+    assert.equal(f.events(receipt, "Resolved").length, 1);
+    assert.deepEqual([...f.events(receipt, "PayoutDeferred")[0]], [receiverAddress, expected]);
+    assert.equal(await f.escrow.pendingWithdrawals(receiverAddress), expected);
+    assert.equal(await f.escrow.totalPendingWei(), expected);
+    assert.equal(await f.balance(await f.escrow.getAddress()), expected);
+    const destinationBefore = await f.balance(f.outsider.address);
+    const withdraw = f.escrow.interface.encodeFunctionData("withdraw", [f.outsider.address]);
+    await (await f.receiver.execute(await f.escrow.getAddress(), withdraw)).wait();
+    assert.equal(await f.balance(f.outsider.address) - destinationBefore, expected);
+    assert.equal(await f.escrow.pendingWithdrawals(receiverAddress), 0n);
+    assert.equal(await f.escrow.totalPendingWei(), 0n);
+    assert.equal(await f.balance(await f.escrow.getAddress()), 0n);
+    await reverts(f.receiver.execute.staticCall(await f.escrow.getAddress(), withdraw), f.escrow, "NothingToWithdraw");
+  });
+  it("withdraw rejects invalid destinations and rolls back when the destination refuses ETH", async t => {
+    const f = await fixture(t); const receiverAddress = await f.receiver.getAddress();
+    const orderId = await f.funded({ seller: receiverAddress });
+    await (await f.escrow.connect(f.buyer).raiseDispute(orderId)).wait();
+    await (await f.receiver.configure(true, ZeroAddress, "0x")).wait();
+    await (await f.escrow.connect(f.arbiter).resolveDispute(orderId, 10000)).wait();
+    const pending = await f.escrow.pendingWithdrawals(receiverAddress);
+    const address = await f.escrow.getAddress();
+    const call = (to: string) => f.receiver.execute.staticCall(address, f.escrow.interface.encodeFunctionData("withdraw", [to]));
+    await reverts(call(ZeroAddress), f.escrow, "InvalidAddress");
+    await reverts(call(address), f.escrow, "InvalidAddress");
+    await reverts(call(receiverAddress), f.escrow, "TransferFailed");
+    assert.equal(await f.escrow.pendingWithdrawals(receiverAddress), pending);
+    await reverts(f.escrow.connect(f.outsider).withdraw.staticCall(f.outsider.address), f.escrow, "NothingToWithdraw");
+  });
+  it("a recipient burning all forwarded gas cannot block settlement", async t => {
+    const f = await fixture(t); const receiverAddress = await f.receiver.getAddress();
+    const orderId = await f.funded({ seller: receiverAddress });
+    await (await f.escrow.connect(f.buyer).raiseDispute(orderId)).wait();
+    await (await f.receiver.configureGasBurn(true)).wait();
+    const receipt = await (await f.escrow.connect(f.arbiter).resolveDispute(orderId, 10000)).wait();
+    assert.equal((await f.escrow.getOrder(orderId)).state, State.Resolved);
+    assert.ok(receipt.gasUsed < 400000n, `settlement used ${receipt.gasUsed} gas`);
+    assert.equal(await f.escrow.pendingWithdrawals(receiverAddress), amount * 99n / 100n);
   });
   it("recipient callback cannot reenter payable deposit even for a different Created order", async t => {
     const f = await fixture(t, true); const receiverAddress = await f.receiver.getAddress();

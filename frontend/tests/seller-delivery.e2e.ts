@@ -10,12 +10,12 @@ const seller = "0x2222222222222222222222222222222222222222";
 const network = { status: "Ready", deploymentId: "delivery-test", chainId: "31337", contractAddress: "0x4444444444444444444444444444444444444444", deploymentBlock: 1, deploymentBlockHash: "0x" + "ab".repeat(32) };
 const zip = Buffer.from("UEsDBBQAAAAAAKGYRl1YeXccKgAAACoAAAAKAAAAaW5kZXguaHRtbDwhZG9jdHlwZSBodG1sPjxoMT5TdHVkZW50RXNjcm93IGRlbW88L2gxPlBLAQIUABQAAAAAAKGYRl1YeXccKgAAACoAAAAKAAAAAAAAAAAAAACAAQAAAABpbmRleC5odG1sUEsFBgAAAAABAAEAOAAAAFIAAAAAAA==", "base64");
 const product = { id: "product", kind: "product", fileName: "landing-page.zip", length: zip.length, sha256: sha256(zip), createdAt: "2026-01-01T00:00:00Z" };
-type Stage = "Draft" | "Created" | "Funded" | "Expired" | "Archived";
+type Stage = "Draft" | "Created" | "Accepted" | "Funded" | "Expired" | "Archived";
 async function setup(page: Page, stage: Stage = "Funded", sync = true) {
-  const draft = { id: "00000000-0000-0000-0000-000000000002", deploymentId: network.deploymentId, buyer, seller, arbiter: "0x3333333333333333333333333333333333333333", amountWei: "10000000000000000", description: "Seller delivery test", acceptanceCriteria: "Landing page responsive", deliveryDeadline: stage === "Expired" ? 1699999999 : 2000000000, reviewWindow: 300, clientReference: "0x" + "11".repeat(32), termsJson: "", termsHash: "", createdAt: "2026-01-01T00:00:00Z" };
-  draft.termsJson = JSON.stringify({ version: 1, chainId: 31337, contract: network.contractAddress, deploymentId: draft.deploymentId, buyer, seller, arbiter: draft.arbiter, amountWei: draft.amountWei, description: draft.description, acceptanceCriteria: draft.acceptanceCriteria, deliveryDeadline: draft.deliveryDeadline, reviewWindow: draft.reviewWindow, clientReference: draft.clientReference, feeBps: 100 });
+  const draft = { id: "00000000-0000-0000-0000-000000000002", deploymentId: network.deploymentId, buyer, seller, arbiter: "0x3333333333333333333333333333333333333333", amountWei: "10000000000000000", description: "Seller delivery test", acceptanceCriteria: "Landing page responsive", deliveryDeadline: stage === "Expired" ? 1699999999 : 2000000000, reviewWindow: 300, clientReference: "0x" + "11".repeat(32), termsJson: "", termsHash: "", standardTermsVersion: "v1", createdAt: "2026-01-01T00:00:00Z" };
+  draft.termsJson = JSON.stringify({ version: 2, standardTermsVersion: "v1", standardTermsHash: "0x" + "cd".repeat(32), chainId: 31337, contract: network.contractAddress, deploymentId: draft.deploymentId, buyer, seller, arbiter: draft.arbiter, amountWei: draft.amountWei, description: draft.description, acceptanceCriteria: draft.acceptanceCriteria, deliveryDeadline: draft.deliveryDeadline, reviewWindow: draft.reviewWindow, clientReference: draft.clientReference, feeBps: 100 });
   draft.termsHash = sha256(toUtf8Bytes(draft.termsJson));
-  const view: OrderView = { draft, chain: stage === "Draft" ? null : { orderId: "1", state: stage === "Created" ? "Created" : "Funded", deliveryHash: null, reviewDeadline: null, buyerRefundWei: "0", sellerNetWei: "0", platformFeeWei: "0" }, termsMatch: stage !== "Draft", syncStatus: stage === "Archived" ? "Archived" : "Ready", lastIndexedBlock: 1, checkedAt: "2099-01-01T00:00:00Z", files: [], deliveryFileMatchesChain: false };
+  const view: OrderView = { draft, chain: stage === "Draft" ? null : { orderId: "1", state: stage === "Created" ? "Created" : stage === "Accepted" ? "Accepted" : "Funded", deliveryHash: null, reviewDeadline: null, buyerRefundWei: "0", sellerNetWei: "0", platformFeeWei: "0" }, termsMatch: stage !== "Draft", syncStatus: stage === "Archived" ? "Archived" : "Ready", lastIndexedBlock: 1, checkedAt: "2099-01-01T00:00:00Z", files: [], deliveryFileMatchesChain: false };
   const calls: { from: string; method: string; args: unknown[] }[] = [];
   let uploads = 0;
   await page.exposeFunction("__minedDelivery", (data: string, from: string) => {
@@ -164,7 +164,7 @@ test("mocked rejected delivery allows retry; confirmed delivery stays locked whi
   await expect(page.getByRole("button", { name: "Đang chờ xác nhận bàn giao", exact: true })).toBeDisabled();
 });
 
-for (const [stage, reason] of [["Draft", "Buyer chưa tạo đơn"], ["Created", "Buyer chưa nạp ETH"], ["Expired", "Đã quá hạn giao"], ["Archived", "Đơn thuộc deployment cũ"]] as const) {
+for (const [stage, reason] of [["Draft", "Buyer chưa tạo đơn"], ["Created", "chưa chấp nhận điều khoản"], ["Accepted", "Buyer chưa nạp ETH"], ["Expired", "Đã quá hạn giao"], ["Archived", "Đơn thuộc deployment cũ"]] as const) {
   test(`mocked Seller sees disabled delivery and a reason for ${stage}`, async ({ page }) => {
     await setup(page, stage);
     await expect(page.getByRole("button", { name: "Xác nhận đã gửi code", exact: true })).toBeDisabled();

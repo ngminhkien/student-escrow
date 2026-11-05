@@ -1,5 +1,9 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { sha256, toUtf8Bytes } from "ethers";
+import { parseEther, sha256, toUtf8Bytes } from "ethers";
+import { formatVnd, VND_PER_ETH, vndToWei, WEI_PER_VND } from "../src/domain/money";
 import { actions, amountWei, settlement, shareBps, validateTerms } from "../src/rules";
 import type { NetworkStatus, OrderView } from "../src/types";
 
@@ -7,7 +11,7 @@ const buyer = "0x1111111111111111111111111111111111111111", seller = "0x22222222
 const network: NetworkStatus = { status: "Ready", deploymentId: "demo", chainId: "31337", contractAddress: "0x4444444444444444444444444444444444444444" };
 function view(): OrderView { return {
   draft: { id: "id", deploymentId: "demo", buyer, seller, arbiter, amountWei: "1000", description: "Landing page", acceptanceCriteria: "375/1440px",
-    deliveryDeadline: 100, reviewWindow: 10, clientReference: "0x" + "11".repeat(32), termsHash: "", termsJson: "", createdAt: "" },
+    deliveryDeadline: 100, reviewWindow: 10, clientReference: "0x" + "11".repeat(32), termsHash: "", termsJson: "", standardTermsVersion: "v1", createdAt: "" },
   chain: { orderId: "1", state: "Funded", deliveryHash: null, reviewDeadline: null, buyerRefundWei: "0", sellerNetWei: "0", platformFeeWei: "0" },
   termsMatch: true, syncStatus: "Ready", lastIndexedBlock: 1, checkedAt: "", files: [], deliveryFileMatchesChain: false
 }; }
@@ -52,7 +56,7 @@ test("Only assigned arbiter can resolve disputed orders", () => {
 
 test("Disputes require on-chain delivery, not just an uploaded product", () => {
   const order = view();
-  for (const state of [null, "Created", "Funded", "Disputed", "Completed", "Resolved", "Refunded"] as const) {
+  for (const state of [null, "Created", "Accepted", "Cancelled", "Funded", "Disputed", "Completed", "Resolved", "Refunded"] as const) {
     order.chain = state ? { ...view().chain!, state } : null;
     order.files = [{ id: "zip", kind: "product", fileName: "demo.zip", length: 1, sha256: "0x" + "11".repeat(32), createdAt: "" }];
     for (const wallet of [buyer, seller]) expect(actions(order, wallet, network, 99).dispute).toBe(false);
@@ -82,11 +86,52 @@ test("Completed states and file quotas remove obsolete actions", () => {
 });
 test("Terms digest binds canonical JSON to displayed terms and current contract", () => {
   const order = view(), d = order.draft;
-  const terms = { version: 1, chainId: 31337, contract: network.contractAddress, deploymentId: d.deploymentId,
+  const terms = { version: 2, standardTermsVersion: "v1", standardTermsHash: "0x" + "cd".repeat(32), chainId: 31337, contract: network.contractAddress, deploymentId: d.deploymentId,
     clientReference: d.clientReference, buyer, seller, arbiter, description: d.description, acceptanceCriteria: d.acceptanceCriteria,
     amountWei: d.amountWei, deliveryDeadline: d.deliveryDeadline, reviewWindow: d.reviewWindow, feeBps: 100 };
   d.termsJson = JSON.stringify(terms); d.termsHash = sha256(toUtf8Bytes(d.termsJson));
   expect(() => validateTerms(order, network)).not.toThrow();
   d.amountWei = "1001"; expect(() => validateTerms(order, network)).toThrow();
   d.amountWei = "1000"; d.termsJson += " "; expect(() => validateTerms(order, network)).toThrow();
+  d.termsJson = JSON.stringify(terms); d.termsHash = sha256(toUtf8Bytes(d.termsJson));
+  d.standardTermsVersion = "other"; expect(() => validateTerms(order, network)).toThrow();
+});
+test("Seller must accept before funding; either party can cancel only before funding", () => {
+  const order = view(); order.chain!.state = "Created";
+  expect(actions(order, buyer, network, 50).deposit).toBe(false);
+  expect(actions(order, buyer, network, 50).accept).toBe(false);
+  expect(actions(order, arbiter, network, 50).accept).toBe(false);
+  expect(actions(order, seller, network, 50).accept).toBe(true);
+  expect(actions(order, seller, network, 101).accept).toBe(false);
+  for (const wallet of [buyer, seller]) expect(actions(order, wallet, network, 50).cancel).toBe(true);
+  expect(actions(order, arbiter, network, 50).cancel).toBe(false);
+  order.chain!.state = "Accepted";
+  expect(actions(order, buyer, network, 50).deposit).toBe(true);
+  expect(actions(order, seller, network, 50).deposit).toBe(false);
+  expect(actions(order, seller, network, 50).accept).toBe(false);
+  for (const wallet of [buyer, seller]) expect(actions(order, wallet, network, 50).cancel).toBe(true);
+  for (const state of ["Funded", "Delivered", "Cancelled", "Completed"] as const) {
+    order.chain!.state = state;
+    for (const wallet of [buyer, seller]) expect(actions(order, wallet, network, 50).cancel).toBe(false);
+  }
+  order.chain!.state = "Cancelled";
+  expect(Object.values(actions(order, buyer, network, 50)).every(value => !value)).toBe(true);
+});
+
+test("Fixed VND rate is exact, never rounds and matches the backend constants", () => {
+  assert.equal(vndToWei("1000000"), parseEther("0.01").toString());
+  assert.equal(vndToWei("100.000.000"), parseEther("1").toString());
+  assert.equal(vndToWei("1"), "10000000000");
+  for (const bad of ["0", "-5", "1.5e3", "abc", "", "01"]) assert.throws(() => vndToWei(bad));
+  assert.throws(() => vndToWei("1" + "0".repeat(28)));
+  assert.equal(formatVnd(parseEther("0.01")), "1.000.000 ₫");
+  assert.equal(formatVnd(parseEther("0.0099")), "990.000 ₫");
+  assert.equal(formatVnd(0n), "0 ₫");
+  assert.equal(formatVnd(1000n), "< 1 ₫");
+  assert.equal(formatVnd(-parseEther("0.01")), "-1.000.000 ₫");
+  assert.equal(VND_PER_ETH * WEI_PER_VND, parseEther("1"));
+  const backend = readFileSync(resolve(process.cwd(), "../backend/StudentEscrow.Application/Wallets/ExchangeRate.cs"), "utf8");
+  const constant = (name: string) => BigInt(new RegExp(`${name} = ([0-9_]+);`).exec(backend)![1].replace(/_/g, ""));
+  assert.equal(constant("VndPerEth"), VND_PER_ETH);
+  assert.equal(constant("WeiPerVnd"), WEI_PER_VND);
 });

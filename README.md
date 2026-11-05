@@ -12,11 +12,86 @@
 
 **04 – Draft/file/hash và Nethereum worker đã đạt gate local:** API tạo draft bất biến, lưu file theo quyền/quota, tính SHA-256; worker đọc contract local vào SQL với checkpoint, dedup, restart và phục hồi reorg. Ngày 06/10/2026: 64/64 test .NET PASS gồm SQL thật; smoke API/blockchain, restart và hồi quy auth/ví/KYC PASS. Hướng dẫn chạy, API, cấu hình và giới hạn ở [backend/ORDERS.md](backend/ORDERS.md).
 
-**05 – Frontend React/TypeScript/MetaMask:** không gian làm việc tiếng Việt cho tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Frontend được tổ chức theo tính năng, tách tầng gọi API, domain và hạ tầng ví. Hướng dẫn [chạy, cấu hình và kiểm tra phần 4–5](frontend/README.md). Ví ký phía client; server không giữ private key. Kiểm chứng đầy đủ cần API/SQL/worker và Hardhat đã deploy; test mô phỏng EIP-1193 không thay thế thử popup MetaMask thật. AI và Sepolia chưa triển khai.
+**05 – Frontend React/TypeScript/MetaMask:** không gian làm việc tiếng Việt cho tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Frontend được tổ chức theo tính năng, tách tầng gọi API, domain và hạ tầng ví. Hướng dẫn [chạy, cấu hình và kiểm tra phần 4–5](frontend/README.md). Ví MetaMask ký phía client; ví lưu ký do server ký (xem mục bên dưới). Kiểm chứng đầy đủ cần API/SQL/worker và Hardhat đã deploy; test mô phỏng EIP-1193 không thay thế thử popup MetaMask thật. AI và Sepolia chưa triển khai.
 
 Ghi chú tiến độ và hướng dẫn Swagger chi tiết nằm trong `docs/` trên máy phát triển, không được push. Các bước chạy và kiểm tra API cần thiết nằm ngay trong README này.
 
 Kết quả phần 01: build sạch, 11 test lúc hoàn thành phần này và HTTP public/Swagger chạy được. Người dùng đã chạy full smoke bằng PowerShell thường với SQL thật, tất cả ca PASS; **phần 01 đạt gate**. Sau phần 02, bộ test .NET có 42 test PASS. SQL ngoài sandbox được agent kiểm chứng lại ngày 04/10/2026; lỗi SSPI vẫn xảy ra trong sandbox. Kết quả chi tiết lưu cục bộ trong `docs/01_VALIDATION.md`, `docs/02_VALIDATION.md` và `docs/03_VALIDATION.md`.
+
+## Ví lưu ký, số dư và tỷ giá VND
+
+**Người dùng chọn khi đăng ký và không đổi được sau đó.** Mặc định là **Hệ thống giữ ví hộ**: server sinh private key, mã hóa rồi lưu vào SQL, và tự ký giao dịch khi người dùng bấm thao tác; số dư nằm trong sổ cái SQL. Lựa chọn còn lại là **Tự giữ ví bằng MetaMask**: người dùng liên kết ví bằng chữ ký, tự xác nhận giao dịch và trả gas; số dư là ETH của ví, không có sổ cái; nạp tiền qua cổng sẽ nhận ETH thẳng vào ví. Hai loại ví giao dịch được với nhau trong cùng một đơn. Admin dùng loại nào cũng quản trị được, vì quyền nằm ở role trên contract của ví đã liên kết. `CustodialWallet__ImportHardhatWallets` (mặc định tắt) chuyển mọi tài khoản đang liên kết ví Hardhat #0–#19 sang ví lưu ký mỗi khi API khởi động, nên chỉ bật khi chạy `smoke:custodial`. Tài khoản dùng ví MetaMask khác (server không có khóa) tiếp tục ký bằng MetaMask như cũ và không có số dư sổ cái. API vẫn nhận `useExternalWallet: true` khi đăng ký để dùng ví tự giữ.
+
+**Tỷ giá cố định:** `1 ETH = 100.000.000 VND`, tức `1 VND = 10^10 wei`, nên đổi VND sang wei không bao giờ làm tròn. Đây là tỷ giá demo, không phải giá thị trường. Hằng số nằm ở `ExchangeRate.cs` và `frontend/src/domain/money.ts`; `rules.unit.ts` báo lỗi nếu hai bên lệch nhau. Xem qua `GET /api/wallets/exchange-rate`.
+
+**Khóa riêng:** AES-256-GCM, ciphertext gắn với UserId và địa chỉ ví nên chuyển dòng giữa các tài khoản sẽ không giải mã được. API không bao giờ trả khóa. Master key lấy từ `CustodialWallet__MasterKey` (base64 của 32 byte), hoặc ở Development tự tạo tại `.runtime/custodial-master.key` (đã gitignore). **Mất file này thì mọi ví đã tạo không ký được nữa, nên hãy sao lưu nó riêng, không commit.** Mức bảo vệ này đủ cho demo; hệ thống thật cần HSM/KMS. Ví lưu ký bị khóa ở Development và chain local vì ví nền tảng và ví import dùng mnemonic công khai của Hardhat.
+
+**Số dư và blockchain:**
+
+- Sổ cái là số dư của người dùng và tồn tại độc lập với chain. Mọi thay đổi đi kèm một dòng `LedgerEntries` có khóa chống ghi trùng.
+- Ký quỹ trừ sổ cái trước, thiếu tiền thì không có gì lên chain. Giao dịch chắc chắn không thực thi thì hoàn lại. Worker ghi có khi đọc được `Released`/`Resolved`/`Refunded`, cùng transaction với checkpoint, và đảo lại nếu reorg.
+- Mỗi khoản ghi có đều kèm ETH thật gửi vào ví lưu ký, nên ETH trên chain luôn lớn hơn hoặc bằng số dư sổ cái. Trước khi ký, ví nền tảng (Hardhat #0, cũng là ví Admin và ví nhận phí) cấp thêm phí gas nếu thiếu, nên số dư VND không bị gas làm lệch.
+- Khởi động lại Hardhat làm mất ETH đang khóa. Khi deployment mới được đồng bộ lần đầu, các khoản ký quỹ chưa quyết toán của deployment cũ tự hoàn về Buyer.
+
+**Nạp tiền:** người dùng tự nạp ở **Tài khoản & ví** qua cổng giả lập (xem mục bên dưới). Admin vẫn ghi có thủ công được ở mục **Quản trị** (`POST /api/admin/wallets/credits`). Tài khoản mới và tài khoản import bắt đầu từ 0 ₫. Quyền Admin ở API kiểm tra role trên contract của chính ví người gọi, không dựa vào email.
+
+**Sau khi cập nhật:** contract đã đổi nên phải khởi động lại Hardhat và deploy lại, rồi Admin xác minh lại Buyer/Seller. Migration chạy tự động khi API khởi động ở Development.
+
+```powershell
+cd blockchain; npm run node              # terminal 1
+cd blockchain; npm run deploy:local      # terminal 2, sau đó chạy API và frontend
+npm run smoke:custodial                  # chỉ chạy với API trỏ vào database thử nghiệm
+```
+
+`smoke:mixed` kiểm tra Admin dùng MetaMask và đơn giữa hai loại ví; chạy với API tắt import, trên database thử nghiệm mới. `smoke:custodial` cần `CustodialWallet__ImportHardhatWallets=true` và một tài khoản đang giữ ví Hardhat #0 (`ESCROW_ADMIN_EMAIL`, `ESCROW_ADMIN_PASSWORD`) và sẽ deploy một contract mới ở cuối.
+
+## Chạy demo: mỗi lần là một chain mới
+
+```powershell
+.\scripts\demo-run.ps1            # lần đầu
+.\scripts\demo-run.ps1 -Restart   # tắt node, API, frontend đang chạy rồi chạy lại
+```
+
+Script dừng lại nếu cổng 8545, 5180 hoặc 5173 đang bận, và không xóa gì nếu deploy lỗi. Theo thứ tự, nó làm:
+
+1. Bật Hardhat node mới và deploy contract. Ví #0 là Admin, ví nhận phí và ví nền tảng cấp ETH.
+2. Sao lưu DB vào thư mục Backup của SQL Server (`<tên DB>_before_demo_run.bak`, ghi đè bản trước), rồi xóa dữ liệu không còn đúng với chain: đơn hàng và file đơn hàng, yêu cầu nạp, lịch sử sổ cái, bản sao block, sự kiện, Arbiter và deployment. Số dư sổ cái về 0.
+3. Đưa ETH của ví #1 đến #19 về 0, và Admin xác minh on-chain các ví có KYC `VERIFIED`.
+4. Bật API và frontend.
+
+**Được giữ:** tài khoản, liên kết ví, khóa ví lưu ký, hồ sơ KYC. **Arbiter:** script đặt ví Admin #0 làm Arbiter mặc định; Admin phân xử ở mục **Phân xử**. Admin cũng là ví nhận phí 1% trên phần Seller được nhận, nên đây là lựa chọn cho demo, không phải mô hình trung lập. **Không tự làm:** xác minh tài khoản chưa có KYC `VERIFIED`. KYC đạt giữa chừng chỉ được tự xác minh từ lần chạy sau.
+
+Trước khi demo, xóa dữ liệu hoạt động của từng tài khoản trong MetaMask (Settings → Advanced) vì chain đã mới. Mục **Blockchain** trong ứng dụng đọc thẳng từ node: mỗi giao dịch có một biên lai tại `/?tx=<mã giao dịch>`, ai có link đều xem được mà không cần tài khoản; danh sách biên lai và các block được phân trang; Admin có thêm phần đối chiếu SQL với chain. Link chỉ mở được ở nơi truy cập được ứng dụng và hết hiệu lực khi chain được chạy lại từ đầu. Đây vẫn là một node do bạn điều khiển, nên nó cho thấy dữ liệu minh bạch thế nào chứ chưa chống được chủ node.
+
+## Nạp tiền qua cổng giả lập
+
+Luồng giống một cổng thật, chỉ khác là người dùng tự chọn kết quả và **không có tiền thật nào được chuyển**:
+
+1. `POST /api/wallets/deposits` tạo yêu cầu `Pending` (10.000 ₫ đến 50.000.000 ₫, hết hạn sau 15 phút, tối đa 5 yêu cầu đang mở mỗi tài khoản). Tài khoản ví tự giữ phải liên kết ví trên mạng local trước. Gửi lại cùng `reference` không tạo yêu cầu thứ hai.
+2. `POST /api/wallets/deposits/{id}/mock-payment` đóng vai trang thanh toán của cổng: ký kết quả `Succeeded` hoặc `Failed` rồi đưa vào đúng đường xử lý webhook. `POST .../cancel` hủy yêu cầu.
+3. `POST /api/payments/webhook` là đường duy nhất biến yêu cầu thành tiền. Webhook phải có chữ ký HMAC-SHA256 của `depositId|amountVnd|status|gatewayTransactionId|timestamp` và lệch giờ không quá 5 phút, nếu không sẽ bị từ chối với 401. Số tiền phải khớp yêu cầu. Thành công thì ví lưu ký được ghi một dòng `GatewayDeposit` vào sổ cái trong cùng transaction. Sau khi commit, cả hai loại ví đều được ví nền tảng (Hardhat #0) gửi ETH thật theo tỷ giá cố định.
+
+**Không trả tiền hai lần:** sổ cái dùng khóa `deposit:{id}`, nên webhook gửi lại hoặc gửi đồng thời chỉ ghi có một lần. Yêu cầu đã kết thúc thì không đổi trạng thái nữa. Hết hạn được tính theo thời điểm cổng báo đã thanh toán, nên khoản trả đúng hạn vẫn được ghi nhận dù webhook đến muộn.
+
+**Gửi ETH vào ví:** địa chỉ nhận được chốt lúc tạo yêu cầu. Trạng thái gửi (`payoutStatus`) đi từ `Queued` sang `Sending` và được lưu trước khi phát giao dịch, rồi thành `Sent` kèm mã giao dịch. Nếu chắc chắn giao dịch chưa thực hiện, trạng thái quay về `Queued` và người dùng bấm **Gửi lại ETH** (`POST .../{id}/payout`). Nếu chưa rõ kết quả, trạng thái giữ ở `Sending` và không tự gửi lại để tránh trả hai lần; cần đối chiếu với chain bằng tay. Mã giao dịch được lưu vào yêu cầu nạp và dòng sổ cái.
+
+**Bật và tắt:** `Payments__MockEnabled` đang bật trong `appsettings.Development.json`. API từ chối khởi động nếu bật ở môi trường khác Development, vì cổng này tạo số dư mà không có tiền vào. Khóa ký lấy từ `Payments__WebhookSecret` (base64, tối thiểu 32 byte); Development tự tạo `.runtime/payment-webhook.key` nếu chưa đặt. Thư mục này không được commit.
+
+**Khi chuyển sang VNPay hoặc MoMo sandbox:** thay `mock-payment` bằng bước chuyển hướng sang cổng, đổi cách kiểm tra chữ ký theo tài liệu của cổng và bỏ điều kiện chỉ chạy ở Development. Phần ghi sổ cái giữ nguyên.
+
+**Giới hạn tần suất:** các lệnh đọc số dư, ví, KYC và lịch sử nạp dùng giới hạn `orders` (240/phút); lệnh ghi dùng `wallet-kyc` (30/phút); webhook 120/phút theo IP.
+
+## Thỏa thuận giao dịch: Seller chấp nhận, Arbiter do nền tảng quản lý
+
+**Luồng mới:** Buyer lưu bản nháp → Buyer tạo đơn trên chain → **Seller đọc và chấp nhận** → Buyer ký quỹ → các bước còn lại như cũ. Contract chặn `deposit` cho đến khi có `acceptOrder`, nên Buyer không thể khóa tiền vào một thỏa thuận Seller chưa đồng ý. Trước khi ký quỹ, Buyer hoặc Seller có thể hủy đơn (`cancelOrder`, trạng thái `Cancelled`); không có tiền nào bị giữ.
+
+**Tìm đối tác theo email:** form tạo đơn nhận email Seller thay vì địa chỉ ví (`POST /api/orders/party-lookup`, khớp đúng email, cần đăng nhập, có rate limit). Kết quả chỉ trả tên, email đã che và địa chỉ ví để Buyer đối chiếu trước khi lưu. Hai bên thấy nhau theo tên và email che trong chi tiết đơn.
+
+**Danh sách Arbiter:** Buyer chỉ chọn được Arbiter trong `approvedArbiters` trên contract. Admin thêm hoặc gỡ ở mục **Quản trị** (cần `DEFAULT_ADMIN_ROLE`; riêng `KYC_ADMIN_ROLE` không đủ). Worker đồng bộ danh sách vào bảng `ChainArbiter` để API liệt kê. Gỡ một Arbiter thì các đơn chưa ký quỹ của họ không chấp nhận hay ký quỹ được nữa, và họ mất quyền phân xử ngay; tranh chấp đang mở sẽ được giải quyết bằng cơ chế chia đôi sau 30 ngày nếu không thêm lại họ. Workspace Admin không có mục Đơn hàng nên không phân xử được; hãy chọn một tài khoản thường làm Arbiter.
+
+**Điều khoản soạn sẵn:** nội dung nằm ở `StandardTerms.cs`, có phiên bản, và không được sửa sau khi đã phát hành (thêm phiên bản mới thay vì sửa). Mã hash của nội dung được đưa vào `termsJson`, nên `termsHash` trên chain gắn với đúng văn bản đó; giao diện băm lại văn bản trước khi cho Seller đồng ý. Đồng ý được ghi nhận ở hai nơi: Buyer tích ô khi lưu nháp (API lưu `BuyerAcceptedTermsAt`, từ chối nếu phiên bản không khớp), Seller tích ô rồi ký `acceptOrder` (sự kiện `OrderAccepted` trên chain). Văn bản này là mẫu cho bản demo, chưa được rà soát pháp lý.
+
+**Sau khi cập nhật:** contract đã đổi nên phải deploy lại, rồi Admin xác minh lại ví và thêm ít nhất một Arbiter. Nếu chưa có Arbiter, form tạo đơn sẽ báo và không cho lưu.
 
 ## Quy chuẩn demo đã chốt
 
