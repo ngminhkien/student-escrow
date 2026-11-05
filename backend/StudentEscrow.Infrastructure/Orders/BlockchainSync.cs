@@ -109,7 +109,7 @@ public sealed class BlockchainSync(StudentEscrowDbContext db, IBlockchainSource 
                     await ledger.ApplyChainEventAsync(ev, projected, ct);
                 }
             }
-            db.Add(new ChainBlock { DeploymentId = deployment.Id, Number = number, Hash = block.Hash });
+            db.Add(new ChainBlock { DeploymentId = deployment.Id, Number = number, Hash = block.Hash, Timestamp = block.Timestamp });
             deployment.LastBlock = number;
             deployment.LastBlockHash = block.Hash;
         }

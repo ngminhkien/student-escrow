@@ -9,6 +9,7 @@ import OrdersPanel from "../OrdersPanel";
 import AdminPanel from "../AdminPanel";
 import AuthForm from "../features/auth/AuthForm";
 import ChainExplorer from "../features/chain/ChainExplorer";
+import AnalyticsPage from "../features/analytics/AnalyticsPage";
 import ReceiptView from "../features/chain/ReceiptView";
 import { ReceiptLink } from "../features/chain/ReceiptLink";
 import TransactionJournal from "../features/transactions/TransactionJournal";
@@ -33,7 +34,7 @@ export default function App() {
   const linked = linkedState?.token === session?.accessToken ? linkedState?.value ?? null : null;
   const admin = isAdminAccount(session);
   const [selectedTab, setTab] = useState<WorkspaceTab>(receipt ? "chain" : session ? admin ? "admin" : "orders" : "account");
-  const tab = !session ? "account" : selectedTab === "admin" && !admin ? "orders" : selectedTab;
+  const tab = !session ? "account" : (selectedTab === "admin" || selectedTab === "analytics") && !admin ? "orders" : selectedTab;
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -129,6 +130,7 @@ export default function App() {
     {session && <fieldset className="wallet-action-gate" disabled={!walletReady} aria-describedby={!walletReady ? "wallet-access-warning" : undefined}>
     <legend className="sr-only">Chức năng yêu cầu kết nối đúng ví tài khoản</legend>
     {session && tab === "orders" && <OrdersPanel key={identity} arbiterOnly={admin} session={session} account={account} canSign={canSign && matched} network={network} chainTime={chainTime} busy={working} run={run} record={record} revision={liveRevision} custodial={custodial} />}
+    {session && admin && tab === "analytics" && <AnalyticsPage key={identity} token={identity} revision={revision} />}
     {session && admin && tab === "admin" && <AdminPanel key={identity} account={matched ? account : ""} canSign={canSign && matched} network={network} busy={working} run={run} record={record} revision={liveRevision} custodial={custodial} token={identity} />}
     {session && tab === "account" && !custodial && <details><summary>Lịch sử giao dịch ví</summary><TransactionJournal transactions={visibleTransactions} busy={working} run={run} check={checkTransactions} /></details>}
     </fieldset>}

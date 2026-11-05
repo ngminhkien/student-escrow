@@ -10,6 +10,9 @@ import { useEffect, useRef } from "react";
 import OrderWorkflow from "./OrderWorkflow";
 import { Icon } from "../../shared/ui/Icon";
 import OrderRules from "./OrderRules";
+import OrderRisk from "./OrderRisk";
+import { sameAddress } from "../../domain/rules";
+import { isAdminAccount } from "../../domain/access";
 import { Copyable } from "../../shared/ui/CopyButton";
 export default function OrderDetail(props: OrdersProps & { view: OrderView; onRefresh: () => void }) {
   const { view, chainTime } = props;
@@ -39,6 +42,7 @@ export default function OrderDetail(props: OrdersProps & { view: OrderView; onRe
       <dl><dt>Hạn giao</dt><dd>{date(draft.deliveryDeadline)}</dd><dt>Khoảng phản hồi</dt><dd>{draft.reviewWindow} giây từ khi bàn giao</dd><dt>Hạn phản hồi</dt><dd>{date(view.chain?.reviewDeadline)}</dd></dl>
       <div className="summary-terms"><h3>Tiêu chí nghiệm thu</h3><p className="pre-wrap">{draft.acceptanceCriteria}</p></div>
       <details><summary>Các bên tham gia</summary><dl>{(["buyer", "seller", "arbiter"] as const).map(role => <div key={role}><dt>{role === "buyer" ? "Buyer" : role === "seller" ? "Seller" : "Arbiter"}</dt><dd>{view.parties?.[role] && <>{view.parties[role]!.fullName} · {view.parties[role]!.maskedEmail}<br /></>}<Copyable value={draft[role]} label={`ví ${role === "buyer" ? "Buyer" : role === "seller" ? "Seller" : "Arbiter"}`} /></dd></div>)}</dl></details>
+      {isAdminAccount(props.session) && <OrderRisk token={props.session.accessToken} orderId={draft.id} state={view.chain?.state ?? "Draft"} isArbiter={sameAddress(draft.arbiter, props.account)} />}
       <OrderRules />
     </aside></div>
     <div className="order-diagnostics"><details><summary>Chi tiết đồng bộ</summary><p>Đồng bộ worker: <strong>{view.syncStatus}</strong></p><p>Block đã lập chỉ mục: {view.lastIndexedBlock} · Mã đơn trên chain: {view.chain?.orderId ?? "chưa có"}</p><p>Thời gian blockchain: {date(chainTime)}</p></details>

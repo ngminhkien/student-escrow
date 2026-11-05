@@ -89,8 +89,8 @@
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
-        "resolved": "8.0.0",
-        "contentHash": "3WA9q9yVqJp222P3x1wYIGDAkpjAku0TMUaaQV22g6L67AI0LdOIrVS7Ht2vJfLHGSPVuqN94vIr15qn+HEkHw=="
+        "resolved": "9.0.4",
+        "contentHash": "9VGI5kxIvrNG2mqLQZnUR6y/3fcnygD8eNpHR+CqfbnIXvea6nehnYknDKQTxZVPMpzpNca+7DxLBmpdB3q0Bw=="
       },
       "Microsoft.Bcl.Cryptography": {
         "type": "Transitive",
@@ -287,6 +287,32 @@
           "Microsoft.Bcl.Cryptography": "10.0.2",
           "Microsoft.IdentityModel.Logging": "8.19.2"
         }
+      },
+      "Microsoft.ML": {
+        "type": "Transitive",
+        "resolved": "5.0.1",
+        "contentHash": "H+MSEsYVrNyV/AcA2UtgYkHsuXEKNVOoKUtUCv+nFzD5+1NWeRMRM87A1wL6jm1CCMTLlPQDR4tkurpEtO+dQg==",
+        "dependencies": {
+          "Microsoft.Bcl.AsyncInterfaces": "9.0.4",
+          "Microsoft.ML.CpuMath": "5.0.1",
+          "Microsoft.ML.DataView": "5.0.1",
+          "Newtonsoft.Json": "13.0.3",
+          "System.CodeDom": "9.0.4",
+          "System.Numerics.Tensors": "9.0.4"
+        }
+      },
+      "Microsoft.ML.CpuMath": {
+        "type": "Transitive",
+        "resolved": "5.0.1",
+        "contentHash": "8qG872NrrcBItqNVRomcR8I9qfsidbonMtyuEihn1VTmDiDl0/B2g2OvLNfhl5ZrsDaff7s9XpUKKFCo+85fLQ==",
+        "dependencies": {
+          "System.Numerics.Tensors": "9.0.4"
+        }
+      },
+      "Microsoft.ML.DataView": {
+        "type": "Transitive",
+        "resolved": "5.0.1",
+        "contentHash": "k7V0P33vXBD8S53OjIoJGKEGFLNf0LMDUUBnmZRtSwlgruhBGGdrxjhDn5GwPK2t0hP3/SPM8Qdly14CIftIBw=="
       },
       "Microsoft.NETCore.Platforms": {
         "type": "Transitive",
@@ -553,8 +579,8 @@
       },
       "System.CodeDom": {
         "type": "Transitive",
-        "resolved": "6.0.0",
-        "contentHash": "CPc6tWO1LAer3IzfZufDBRL+UZQcj5uS207NHALQzP84Vp/z6wF0Aa0YZImOQY8iStY0A2zI/e3ihKNPfUm8XA=="
+        "resolved": "9.0.4",
+        "contentHash": "aJdv7Z87PoPW8ijvGIincocooYRbH3Umtlz7OrJKf6GDInbdu1bvk5X1fFlmbl7WP+9ntoIBd7NjKz+siVFdHA=="
       },
       "System.Composition": {
         "type": "Transitive",
@@ -626,6 +652,11 @@
         "resolved": "8.0.1",
         "contentHash": "BVYuec3jV23EMRDeR7Dr1/qhx7369dZzJ9IWy2xylvb4YfXsrUxspWc4UWYid/tj4zZK58uGZqn2WQiaDMhmAg=="
       },
+      "System.Numerics.Tensors": {
+        "type": "Transitive",
+        "resolved": "9.0.4",
+        "contentHash": "ynVvqELpMWGQJ1Y90rlAmuTiSQIkXD0W5AMj7pVpEjECmrcIJLexIBblgccerHFijayfcsl1KCbkk+Sg5cS9vQ=="
+      },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
         "resolved": "10.0.14",
@@ -650,6 +681,7 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.6.2, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Microsoft.ML": "[5.0.1, )",
           "Nethereum.HDWallet": "[6.1.0, )",
           "Nethereum.JsonRpc.RpcClient": "[6.1.0, )",
           "Nethereum.Signer": "[6.1.0, )",

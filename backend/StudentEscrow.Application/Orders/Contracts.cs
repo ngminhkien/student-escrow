@@ -9,6 +9,7 @@ public sealed class CreateDraftRequest
     // Must come from the platform's Arbiter list.
     [Required, StringLength(42, MinimumLength = 42)] public string Arbiter { get; init; } = "";
     [Required, StringLength(32)] public string AcceptedTermsVersion { get; init; } = "";
+    [StringLength(32)] public string? Category { get; init; }
     [Required, StringLength(4000)] public string Description { get; init; } = "";
     [Required, StringLength(4000)] public string AcceptanceCriteria { get; init; } = "";
     [Required, RegularExpression("^[1-9][0-9]{0,37}$")] public string AmountWei { get; init; } = "";

@@ -265,6 +265,9 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(66)
                         .HasColumnType("nvarchar(66)");
 
+                    b.Property<long>("Timestamp")
+                        .HasColumnType("bigint");
+
                     b.HasKey("DeploymentId", "Number");
 
                     b.ToTable("ChainBlock");
@@ -472,6 +475,10 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BuyerUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("ClientReference")
                         .IsRequired()
                         .HasMaxLength(66)
@@ -567,6 +574,56 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                         .HasFilter("[Kind] = 'product'");
 
                     b.ToTable("OrderFile");
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.RiskAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DataSource")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("EvaluatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("FeatureVersion")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("FeaturesJson")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ScoringSource")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId", "EvaluatedAt");
+
+                    b.ToTable("RiskAssessment");
                 });
 
             modelBuilder.Entity("StudentEscrow.Domain.Users.User", b =>
@@ -775,6 +832,15 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("StudentEscrow.Domain.Orders.OrderFile", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Orders.OrderDraft", null)
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.RiskAssessment", b =>
                 {
                     b.HasOne("StudentEscrow.Domain.Orders.OrderDraft", null)
                         .WithMany()

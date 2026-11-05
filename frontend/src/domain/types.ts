@@ -46,5 +46,5 @@ export interface WalletLinkRequest { challengeId: string; signature: string }
 export interface KycSubmission { fullName: string; studentNumber: string; documentReference: string; selfieReference: string }
 export interface CreateOrderRequest {
   sellerEmail: string; arbiter: string; acceptedTermsVersion: string; description: string; acceptanceCriteria: string;
-  amountWei: string; deliveryDeadline: number; reviewWindow: number;
+  amountWei: string; deliveryDeadline: number; reviewWindow: number; category?: string;
 }

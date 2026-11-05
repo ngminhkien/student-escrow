@@ -9,6 +9,7 @@ import type { Arbiter, PartyLookup } from "../../domain/types";
 import type { OrdersProps } from "./types";
 import StandardTermsPanel, { useStandardTerms } from "./StandardTermsPanel";
 import { Copyable } from "../../shared/ui/CopyButton";
+import { ORDER_CATEGORIES } from "../../domain/analytics";
 const CRITERIA_TEMPLATE = `- Sản phẩm đúng phạm vi đã mô tả ở trên.
 - Mã nguồn chạy được theo hướng dẫn đi kèm trong tệp ZIP.
 - Không có lỗi nghiêm trọng làm hỏng chức năng chính.
@@ -82,7 +83,7 @@ export default function DraftForm({ session, account, network, canSign, busy, ru
       if (deadline <= Math.max(timestamp, Math.floor(Date.now() / 1000))) throw new Error("Hạn giao đã qua theo thời gian blockchain hoặc máy bạn.");
       const created = await createOrder(session.accessToken, { sellerEmail: sellerEmail.trim(), arbiter: chosenArbiter.address,
         acceptedTermsVersion: standard.terms.version, description, acceptanceCriteria, amountWei: vndToWei(String(data.get("amount"))),
-        deliveryDeadline: deadline, reviewWindow });
+        deliveryDeadline: deadline, reviewWindow, category: String(data.get("category")) });
       if (!mounted.current || liveScope.current !== scope) return;
       validateTerms(created, freshNetwork); onCreated(created.draft.id);
       } catch (failure) { if (mounted.current && liveScope.current === scope) setFormError(errorMessage(failure)); throw failure; }
@@ -96,6 +97,7 @@ export default function DraftForm({ session, account, network, canSign, busy, ru
       <div><label>Arbiter<select name="arbiter" required value={chosenArbiter?.address ?? ""} onChange={event => setArbiter(event.target.value)}><option value="">Chọn Arbiter</option>{choices.map(item => <option key={item.address} value={item.address}>{item.fullName}</option>)}</select></label>
         {chosenArbiter && <p className="small"><Copyable value={chosenArbiter.address} label="ví Arbiter" /></p>}
         {arbiterError ? <p className="banner" role="alert">{arbiterError}</p> : arbiters && !choices.length ? <p className="banner" role="alert">Chưa có Arbiter phù hợp. Admin cần thêm Arbiter ở mục Quản trị.</p> : <p className="small muted">Danh sách do nền tảng quản lý. Arbiter mặc định là Admin của nền tảng, cũng là ví nhận phí 1% trên phần Seller được nhận. Seller cũng xem Arbiter này trước khi chấp nhận.</p>}</div></div>
+    <label>Loại dịch vụ<select name="category" required defaultValue="design">{ORDER_CATEGORIES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
     <label>Nội dung công việc<textarea name="description" required maxLength={4000} placeholder="Thiết kế và lập trình landing page…" /></label>
     <label>Tiêu chí nghiệm thu<textarea name="criteria" required maxLength={4000} defaultValue={CRITERIA_TEMPLATE} rows={5} /></label>
     <div className="grid three"><label>Số tiền (VND)<input name="amount" inputMode="numeric" required value={amount} onChange={event => setAmount(event.target.value)} /></label>

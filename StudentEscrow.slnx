@@ -5,6 +5,9 @@
     <Project Path="backend/StudentEscrow.Domain/StudentEscrow.Domain.csproj" />
     <Project Path="backend/StudentEscrow.Infrastructure/StudentEscrow.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/analytics/">
+    <Project Path="analytics/ai/StudentEscrow.RiskTraining/StudentEscrow.RiskTraining.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/StudentEscrow.Application.Tests/StudentEscrow.Application.Tests.csproj" />
     <Project Path="tests/StudentEscrow.ApiSmoke/StudentEscrow.ApiSmoke.csproj" />

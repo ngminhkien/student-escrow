@@ -16,6 +16,7 @@ public static class DemoReset
         await db.LedgerEntries.ExecuteDeleteAsync(ct);
         await db.LedgerAccounts.ExecuteUpdateAsync(set => set.SetProperty(account => account.BalanceWei, 0m), ct);
         await db.DepositRequests.ExecuteDeleteAsync(ct);
+        await db.Set<RiskAssessment>().ExecuteDeleteAsync(ct);
         await db.Set<OrderFile>().ExecuteDeleteAsync(ct);
         await db.Set<OrderDraft>().ExecuteDeleteAsync(ct);
         await db.Set<ChainEvent>().ExecuteDeleteAsync(ct);

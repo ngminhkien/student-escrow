@@ -17,6 +17,17 @@ public static class EscrowModel
         draft.Property(x => x.Description).HasMaxLength(4000);
         draft.Property(x => x.AcceptanceCriteria).HasMaxLength(4000);
         draft.Property(x => x.StandardTermsVersion).HasMaxLength(32);
+        draft.Property(x => x.Category).HasMaxLength(32);
+        var risk = model.Entity<RiskAssessment>();
+        risk.HasKey(x => x.Id);
+        risk.HasIndex(x => new { x.DraftId, x.EvaluatedAt });
+        risk.HasOne<OrderDraft>().WithMany().HasForeignKey(x => x.DraftId).OnDelete(DeleteBehavior.Restrict);
+        risk.Property(x => x.Level).HasMaxLength(16);
+        risk.Property(x => x.ScoringSource).HasMaxLength(16);
+        risk.Property(x => x.ModelVersion).HasMaxLength(32);
+        risk.Property(x => x.FeatureVersion).HasMaxLength(16);
+        risk.Property(x => x.DataSource).HasMaxLength(32);
+        risk.Property(x => x.FeaturesJson).HasMaxLength(1000);
         var file = model.Entity<OrderFile>();
         file.HasKey(x => x.Id);
         file.HasIndex(x => new { x.DraftId, x.Kind }).IsUnique().HasFilter("[Kind] = 'product'");

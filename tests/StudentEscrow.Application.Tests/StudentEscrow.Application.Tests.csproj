@@ -12,5 +12,6 @@
     </PackageReference>
     <ProjectReference Include="../../backend/StudentEscrow.Infrastructure/StudentEscrow.Infrastructure.csproj" />
     <ProjectReference Include="../../backend/StudentEscrow.API/StudentEscrow.API.csproj" />
+    <ProjectReference Include="../../analytics/ai/StudentEscrow.RiskTraining/StudentEscrow.RiskTraining.csproj" />
   </ItemGroup>
 </Project>

@@ -2,13 +2,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using StudentEscrow.API.Common;
 using StudentEscrow.Application.Orders;
+using StudentEscrow.Application.Risk;
 using StudentEscrow.Infrastructure.Orders;
+using StudentEscrow.Infrastructure.Risk;
 
 namespace StudentEscrow.API.Controllers;
 
 [Route("api/orders")]
 [EnableRateLimiting("orders")]
-public sealed class OrdersController(IOrderService orders, CustodialChainService custody) : AuthenticatedController
+public sealed class OrdersController(IOrderService orders, CustodialChainService custody, RiskService risk) : AuthenticatedController
 {
     [HttpPost]
     public async Task<IActionResult> Create(CreateDraftRequest request, CancellationToken ct)
@@ -33,6 +35,12 @@ public sealed class OrdersController(IOrderService orders, CustodialChainService
     public async Task<IActionResult> List([FromQuery] int skip, CancellationToken ct) => Ok(await orders.ListAsync(CurrentUserId, skip, ct));
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Ok(await orders.GetAsync(CurrentUserId, id, ct));
+    [HttpGet("{id:guid}/risk")]
+    public async Task<ActionResult<RiskResponse>> Risk(Guid id, CancellationToken ct)
+    {
+        await custody.RequireAdminAsync(CurrentUserId, ct);
+        return Ok(await risk.AssessAsync(id, ct));
+    }
     [HttpGet("{id:guid}/events")]
     public async Task<IActionResult> Events(Guid id, [FromQuery] int skip, CancellationToken ct) =>
         Ok(await orders.HistoryAsync(CurrentUserId, id, skip, ct));

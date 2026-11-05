@@ -1,0 +1,126 @@
+{
+  "seed": 20261105,
+  "trainedAt": "2026-11-05T10:32:30.0551668+00:00",
+  "dataSource": "synthetic",
+  "samples": {
+    "train": {
+      "orders": 1650,
+      "sellers": 210,
+      "buyers": 413,
+      "positiveLabels": 348,
+      "positiveRate": 0.2109090909090909
+    },
+    "validation": {
+      "orders": 577,
+      "sellers": 70,
+      "buyers": 138,
+      "positiveLabels": 160,
+      "positiveRate": 0.2772963604852686
+    },
+    "test": {
+      "orders": 545,
+      "sellers": 70,
+      "buyers": 137,
+      "positiveLabels": 122,
+      "positiveRate": 0.22385321100917432
+    }
+  },
+  "selection": {
+    "candidates": [
+      {
+        "l2": 0.0001,
+        "validationAuc": 0.7632044364508394
+      },
+      {
+        "l2": 0.001,
+        "validationAuc": 0.7633842925659472
+      },
+      {
+        "l2": 0.01,
+        "validationAuc": 0.7597272182254197
+      },
+      {
+        "l2": 0.1,
+        "validationAuc": 0.7349370503597122
+      },
+      {
+        "l2": 1,
+        "validationAuc": 0.5141037170263789
+      }
+    ],
+    "chosenL2": 0.001,
+    "modelThreshold": 0.25,
+    "baselineThreshold": 20
+  },
+  "test": {
+    "model": {
+      "rocAuc": 0.7637290237569275,
+      "mlNetRocAuc": 0.7637290237569275,
+      "logLoss": 0.6189209732941859,
+      "atDefaultThreshold": {
+        "threshold": 0.5,
+        "truePositive": 53,
+        "falsePositive": 16,
+        "trueNegative": 407,
+        "falseNegative": 69,
+        "precision": 0.7681159420289855,
+        "recall": 0.4344262295081967,
+        "f1": 0.5549738219895287
+      },
+      "atValidationThreshold": {
+        "threshold": 0.25,
+        "truePositive": 73,
+        "falsePositive": 49,
+        "trueNegative": 374,
+        "falseNegative": 49,
+        "precision": 0.5983606557377049,
+        "recall": 0.5983606557377049,
+        "f1": 0.5983606557377049
+      },
+      "levels": {
+        "low": 467,
+        "medium": 38,
+        "high": 40
+      }
+    },
+    "baseline": {
+      "rocAuc": 0.7780296864705655,
+      "atMediumLevel": {
+        "threshold": 40,
+        "truePositive": 44,
+        "falsePositive": 11,
+        "trueNegative": 412,
+        "falseNegative": 78,
+        "precision": 0.8,
+        "recall": 0.36065573770491804,
+        "f1": 0.4971751412429379
+      },
+      "atValidationThreshold": {
+        "threshold": 20,
+        "truePositive": 79,
+        "falsePositive": 47,
+        "trueNegative": 376,
+        "falseNegative": 43,
+        "precision": 0.626984126984127,
+        "recall": 0.6475409836065574,
+        "f1": 0.6370967741935485
+      },
+      "levels": {
+        "low": 490,
+        "medium": 53,
+        "high": 2
+      }
+    }
+  },
+  "standardizedWeights": {
+    "AmountEth": 0.041205093,
+    "BuyerAccountAgeDays": -0.16522266,
+    "SellerAccountAgeDays": -0.6529799,
+    "SellerPriorFundedCount": -0.1518229,
+    "SellerPriorDisputeRate": 0.22575697,
+    "SellerPriorRefundRate": 0.17752671,
+    "SellerOrdersLast7Days": 0.49391204,
+    "AmountToSellerHistoricalMean": 0.122314066,
+    "SellerHistoryMissing": 0.07512139
+  }
+}

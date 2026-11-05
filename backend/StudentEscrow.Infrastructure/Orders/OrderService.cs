@@ -43,6 +43,7 @@ public sealed class OrderService(StudentEscrowDbContext db, IWalletSignatureVeri
     public async Task<OrderView> CreateAsync(Guid userId, CreateDraftRequest request, CancellationToken ct)
     {
         OrderRules.Validate(request, clock.GetUtcNow().ToUnixTimeSeconds());
+        var category = OrderCategories.Normalize(request.Category);
         var deployment = await Active(ct);
         var buyer = await Wallet(userId, ct);
         var seller = (await Party(request.SellerEmail, deployment.ChainId, ct)).Address;
@@ -57,7 +58,7 @@ public sealed class OrderService(StudentEscrowDbContext db, IWalletSignatureVeri
             Description = request.Description.Trim(), AcceptanceCriteria = request.AcceptanceCriteria.Trim(),
             DeliveryDeadline = request.DeliveryDeadline, ReviewWindow = request.ReviewWindow,
             ClientReference = "0x" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)), CreatedAt = clock.GetUtcNow(),
-            StandardTermsVersion = StandardTerms.Current.Version, BuyerAcceptedTermsAt = clock.GetUtcNow() };
+            StandardTermsVersion = StandardTerms.Current.Version, BuyerAcceptedTermsAt = clock.GetUtcNow(), Category = category };
         OrderRules.Seal(draft, deployment.ChainId, deployment.ContractAddress);
         db.Add(draft);
         await db.SaveChangesAsync(ct);

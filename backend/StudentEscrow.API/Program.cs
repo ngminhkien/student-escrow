@@ -19,6 +19,8 @@ using StudentEscrow.Application.Orders;
 using StudentEscrow.Infrastructure.Orders;
 using StudentEscrow.Infrastructure.Ledger;
 using StudentEscrow.Infrastructure.Payments;
+using StudentEscrow.Application.Risk;
+using StudentEscrow.Infrastructure.Risk;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -120,6 +122,13 @@ builder.Services.AddSingleton(_ => payments.MockEnabled
     ? PaymentSigner.Load(payments, builder.Environment.IsDevelopment())
     : new PaymentSigner(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
 builder.Services.AddScoped<DepositService>();
+var risk = builder.Configuration.GetSection("Risk").Get<RiskSettings>() ?? new RiskSettings();
+risk.ModelDirectory = Path.GetFullPath(risk.ModelDirectory, builder.Environment.ContentRootPath);
+risk.SyntheticDataPath = Path.GetFullPath(risk.SyntheticDataPath, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton(risk);
+builder.Services.AddSingleton<IRiskModel>(services => new MlRiskModel(risk.ModelDirectory, services.GetRequiredService<ILogger<MlRiskModel>>()));
+builder.Services.AddScoped<RiskService>();
+builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>

@@ -12,7 +12,9 @@
 
 **04 – Draft/file/hash và Nethereum worker đã đạt gate local:** API tạo draft bất biến, lưu file theo quyền/quota, tính SHA-256; worker đọc contract local vào SQL với checkpoint, dedup, restart và phục hồi reorg. Ngày 06/10/2026: 64/64 test .NET PASS gồm SQL thật; smoke API/blockchain, restart và hồi quy auth/ví/KYC PASS. Hướng dẫn chạy, API, cấu hình và giới hạn ở [backend/ORDERS.md](backend/ORDERS.md).
 
-**05 – Frontend React/TypeScript/MetaMask:** không gian làm việc tiếng Việt cho tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Frontend được tổ chức theo tính năng, tách tầng gọi API, domain và hạ tầng ví. Hướng dẫn [chạy, cấu hình và kiểm tra phần 4–5](frontend/README.md). Ví MetaMask ký phía client; ví lưu ký do server ký (xem mục bên dưới). Kiểm chứng đầy đủ cần API/SQL/worker và Hardhat đã deploy; test mô phỏng EIP-1193 không thay thế thử popup MetaMask thật. AI và Sepolia chưa triển khai.
+**05 – Frontend React/TypeScript/MetaMask:** không gian làm việc tiếng Việt cho tài khoản/ví/KYC, draft/đơn/file, ký giao dịch, Admin xác minh/phân quyền KYC và Arbiter phân xử. Frontend được tổ chức theo tính năng, tách tầng gọi API, domain và hạ tầng ví. Hướng dẫn [chạy, cấu hình và kiểm tra phần 4–5](frontend/README.md). Ví MetaMask ký phía client; ví lưu ký do server ký (xem mục bên dưới). Kiểm chứng đầy đủ cần API/SQL/worker và Hardhat đã deploy; test mô phỏng EIP-1193 không thay thế thử popup MetaMask thật. Sepolia chưa triển khai.
+
+**06 – Analytics và AI Risk Scoring:** điểm rủi ro 0–100 cho từng đơn bằng Logistic Regression ML.NET đã huấn luyện trên dữ liệu giả lập, có baseline theo luật làm phương án dự phòng; bảng thống kê cho Admin tách riêng dữ liệu chain và giả lập. Điểm rủi ro và bảng thống kê chỉ Admin được xem. Điểm chỉ để cảnh báo, không ảnh hưởng tới tiền hay trạng thái đơn. Trên tập test, mô hình **không tốt hơn** baseline. Quy trình, số liệu và hạn chế ở [analytics/README.md](analytics/README.md).
 
 Ghi chú tiến độ và hướng dẫn Swagger chi tiết nằm trong `docs/` trên máy phát triển, không được push. Các bước chạy và kiểm tra API cần thiết nằm ngay trong README này.
 
@@ -226,7 +228,8 @@ tests/        test auth/ví/KYC và chương trình smoke HTTP có ký Ethereum
 scripts/      chọn SDK, chạy backend, smoke test HTTP
 blockchain/   contract Solidity, test Hardhat, ABI, deploy và smoke local
 frontend/     React/MetaMask, giao diện demo trắng–đen và test trình duyệt
+analytics/    console huấn luyện ML.NET, mô hình đã lưu, dữ liệu giả lập
 docs/         ghi chú cục bộ, không push
 ```
 
-`frontend/` chứa React/MetaMask và giao diện các vai trò ở phần 05. Phần 04 nối API/file với contract qua Nethereum worker; contract vẫn là nguồn sự thật cho tiền/trạng thái. Bước kế tiếp là phần 06: analytics/ML.NET; `analytics` chưa triển khai.
+`frontend/` chứa React/MetaMask và giao diện các vai trò ở phần 05. Phần 04 nối API/file với contract qua Nethereum worker; contract vẫn là nguồn sự thật cho tiền/trạng thái. Phần 06 ở `analytics/`. Phần 07 (Sepolia, kiểm thử tích hợp và video demo) chưa triển khai.

@@ -10,13 +10,14 @@ import type { useWalletAccount } from "./useWalletAccount";
 import { formatEthAmount, formatVnd } from "../domain/money";
 import { Copyable } from "../shared/ui/CopyButton";
 
-export type WorkspaceTab = "orders" | "account" | "admin" | "chain";
-const titles = { orders: "Đơn hàng", account: "Tài khoản & ví", admin: "Quản trị", chain: "Blockchain" };
+export type WorkspaceTab = "orders" | "account" | "admin" | "chain" | "analytics";
+const titles = { orders: "Đơn hàng", account: "Tài khoản & ví", admin: "Quản trị", chain: "Blockchain", analytics: "Thống kê" };
 const descriptions = {
   orders: "Mọi thỏa thuận, một nơi quản lý.",
   account: "Quản lý danh tính và ví giao dịch của bạn.",
   admin: "Kiểm soát quyền truy cập. Giữ giao dịch minh bạch.",
-  chain: "Mỗi giao dịch trên chain có một biên lai để tra cứu và chia sẻ."
+  chain: "Mỗi giao dịch trên chain có một biên lai để tra cứu và chia sẻ.",
+  analytics: "Số liệu giao dịch, tách riêng dữ liệu trên chain và dữ liệu giả lập."
 };
 // The Admin only sees orders it arbitrates.
 const titleOf = (item: WorkspaceTab, admin: boolean) => admin && item === "orders" ? "Phân xử" : titles[item];
@@ -32,7 +33,7 @@ function Brand() {
 }
 export default function AppShell({ children, session, logout, tab, setTab, wallet, network, busy, checking, matched, expectedAddress, synchronize, funds, custodial, ledger }: Props) {
   const admin = isAdminAccount(session);
-  const tabs: WorkspaceTab[] = admin ? ["admin", "orders", "chain", "account"] : ["orders", "chain", "account"];
+  const tabs: WorkspaceTab[] = admin ? ["admin", "orders", "analytics", "chain", "account"] : ["orders", "chain", "account"];
   if (!session) return <div className="login-shell">
     <a className="skip-link" href="#workspace-main">Đến nội dung chính</a>
     <header className="login-header"><Brand /><span className="environment-pill"><span className="connection-dot" />ETH thử nghiệm</span></header>
@@ -46,7 +47,7 @@ export default function AppShell({ children, session, logout, tab, setTab, walle
       <div className="navigation-block"><p className="nav-caption">{admin ? "ĐIỀU HÀNH" : "KHÔNG GIAN LÀM VIỆC"}</p>
         <nav className="sidebar-nav" aria-label="Chức năng">{tabs.map(item => <button key={item}
           aria-current={tab === item ? "page" : undefined} className={tab === item ? "active" : "secondary"} onClick={() => setTab(item)}>
-          <Icon name={item === "orders" ? "orders" : item === "account" ? "wallet" : item === "chain" ? "blocks" : "shield"} />
+          <Icon name={item === "orders" ? "orders" : item === "account" ? "wallet" : item === "chain" ? "blocks" : item === "analytics" ? "activity" : "shield"} />
           <span>{titleOf(item, admin)}</span>{tab === item && <span className="nav-indicator" aria-hidden="true" />}
         </button>)}</nav>
       </div>
@@ -68,7 +69,7 @@ export default function AppShell({ children, session, logout, tab, setTab, walle
         <span className="workspace-tag"><Icon name={admin ? "shield" : "check"} size={16} />{admin ? "Quản trị hệ thống" : "Ký quỹ trên blockchain"}</span>
       </div>}
       {tab === "orders" && <h1 className="sr-only">{titleOf(tab, admin)}</h1>}
-      {tab === "chain" ? null : custodial ? <section className="connection readiness-strip wallet-summary wallet-custodial" aria-label="Số dư tài khoản">
+      {tab === "chain" || tab === "analytics" ? null : custodial ? <section className="connection readiness-strip wallet-summary wallet-custodial" aria-label="Số dư tài khoản">
         <div className="wallet-identity"><span className="wallet-symbol"><Icon name="wallet" size={23} /></span><div>
           <span className="wallet-caption">SỐ DƯ KHẢ DỤNG</span>
           <strong data-testid="header-balance">{ledger?.value ? formatVnd(ledger.value.balanceWei) : "Đang tải…"}</strong>

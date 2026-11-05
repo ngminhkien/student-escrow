@@ -38,7 +38,7 @@ public sealed class ManifestProvider(BlockchainSettings settings)
         && value.StartsWith("0x") && value[2..].All(Uri.IsHexDigit);
 }
 
-public sealed record RpcBlock(long Number, string Hash, string ParentHash);
+public sealed record RpcBlock(long Number, string Hash, string ParentHash, long Timestamp = 0);
 public sealed record RpcLog(long BlockNumber, string BlockHash, string TransactionHash, int LogIndex,
     string Address, string[] Topics, string Data, bool Removed);
 
@@ -63,7 +63,7 @@ public sealed class NethereumSource(BlockchainSettings settings) : IBlockchainSo
     public async Task<RpcBlock?> BlockAsync(long number, CancellationToken ct)
     {
         var block = await Rpc<JObject?>("eth_getBlockByNumber", ct, Hex(number), false);
-        return block is null ? null : new(Number((string)block["number"]!), (string)block["hash"]!, (string)block["parentHash"]!);
+        return block is null ? null : new(Number((string)block["number"]!), (string)block["hash"]!, (string)block["parentHash"]!, Number((string)block["timestamp"]!));
     }
     public async Task<bool> ValidateDeploymentAsync(DeploymentManifest m, CancellationToken ct)
     {

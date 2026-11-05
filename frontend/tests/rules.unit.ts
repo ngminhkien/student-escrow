@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { barWidth, categoryLabel, distributionRows, rateText, riskLevelText, scoringText } from "../src/domain/analytics";
 import { parseEther, sha256, toUtf8Bytes } from "ethers";
 import { formatVnd, VND_PER_ETH, vndToWei, WEI_PER_VND } from "../src/domain/money";
 import { actions, amountWei, settlement, shareBps, validateTerms } from "../src/rules";
@@ -134,4 +135,21 @@ test("Fixed VND rate is exact, never rounds and matches the backend constants", 
   const constant = (name: string) => BigInt(new RegExp(`${name} = ([0-9_]+);`).exec(backend)![1].replace(/_/g, ""));
   assert.equal(constant("VndPerEth"), VND_PER_ETH);
   assert.equal(constant("WeiPerVnd"), WEI_PER_VND);
+});
+test("Analytics shows no data instead of a false 0%, and keeps small counts visible", () => {
+  expect(rateText(0, 0)).toBe("Chưa có dữ liệu");
+  expect(rateText(0, 5)).toBe("0%");
+  expect(rateText(0.125, 8)).toBe("12,5%");
+  expect(barWidth(0, 100)).toBe(0);
+  expect(barWidth(1, 1000)).toBe(2);
+  expect(barWidth(100, 100)).toBe(100);
+  expect(distributionRows({ low: 1, medium: 0, high: 2, unavailable: 0, scoringSource: "ml", modelVersion: "x" }).map(row => row.key)).toEqual(["LOW", "MEDIUM", "HIGH"]);
+  expect(distributionRows({ low: 0, medium: 0, high: 0, unavailable: 3, scoringSource: "unavailable", modelVersion: null }).at(-1)?.count).toBe(3);
+  expect(categoryLabel("uncategorized")).toBe("Chưa phân loại");
+});
+test("Risk source is always named, so a fallback never passes as the model", () => {
+  expect(scoringText({ scoringSource: "ml", modelVersion: "logistic-v1", dataSource: "synthetic" })).toContain("logistic-v1");
+  expect(scoringText({ scoringSource: "ml", modelVersion: "logistic-v1", dataSource: "synthetic" })).toContain("giả lập");
+  expect(scoringText({ scoringSource: "rule-based", modelVersion: null, dataSource: "rules" })).toContain("không phải mô hình");
+  expect(riskLevelText.UNAVAILABLE).toBe("Chưa đánh giá được");
 });

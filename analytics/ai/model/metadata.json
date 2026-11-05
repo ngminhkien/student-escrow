@@ -1,0 +1,36 @@
+{
+  "modelVersion": "logistic-v1",
+  "featureVersion": "v1",
+  "featureNames": [
+    "AmountEth",
+    "BuyerAccountAgeDays",
+    "SellerAccountAgeDays",
+    "SellerPriorFundedCount",
+    "SellerPriorDisputeRate",
+    "SellerPriorRefundRate",
+    "SellerOrdersLast7Days",
+    "AmountToSellerHistoricalMean",
+    "SellerHistoryMissing"
+  ],
+  "modelSha256": "5d703790666389294228d96ac84a16fd939cfa20827bd4dee9b82f541602775c",
+  "dataSource": "synthetic",
+  "trainedAt": "2026-11-05T10:32:30.0551668+00:00",
+  "seed": 20261105,
+  "mlNetVersion": "1.0.0.0",
+  "trainer": "SdcaLogisticRegression",
+  "l2Regularization": 0.001,
+  "validationThreshold": 0.25,
+  "baselineRules": {
+    "minimumHistory": 5,
+    "newAccountDays": 7,
+    "newAccountPoints": 20,
+    "disputeRateLimit": 0.2,
+    "disputePoints": 25,
+    "refundRateLimit": 0.2,
+    "refundPoints": 15,
+    "amountRatioLimit": 3,
+    "amountPoints": 25,
+    "frequencyLimit": 10,
+    "frequencyPoints": 15
+  }
+}

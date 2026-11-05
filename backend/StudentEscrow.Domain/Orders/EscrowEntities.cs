@@ -18,9 +18,25 @@ public sealed class OrderDraft
     public string TermsJson { get; set; } = "";
     public string TermsHash { get; set; } = "";
     public string StandardTermsVersion { get; set; } = "";
+    public string? Category { get; set; }
     // The Buyer's recorded consent. The Seller's is the OrderAccepted event on chain.
     public DateTimeOffset? BuyerAcceptedTermsAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+// What a party was shown, and the inputs behind it. Advisory record only; no order logic reads it.
+public sealed class RiskAssessment
+{
+    public Guid Id { get; set; }
+    public Guid DraftId { get; set; }
+    public int? Score { get; set; }
+    public string Level { get; set; } = "";
+    public string ScoringSource { get; set; } = "";
+    public string? ModelVersion { get; set; }
+    public string FeatureVersion { get; set; } = "";
+    public string? DataSource { get; set; }
+    public string FeaturesJson { get; set; } = "";
+    public DateTimeOffset EvaluatedAt { get; set; }
 }
 
 public sealed class OrderFile
@@ -55,6 +71,8 @@ public sealed class ChainBlock
     public Guid DeploymentId { get; set; }
     public long Number { get; set; }
     public string Hash { get; set; } = "";
+    // Unix seconds from the block header. 0 on blocks synced before this column existed.
+    public long Timestamp { get; set; }
 }
 
 public sealed class ChainEvent
