@@ -63,7 +63,9 @@ public sealed class DemoResetTests
                 new ChainArbiter { DeploymentId = deployment, Address = verified, Approved = true },
                 new ChainOrder { DeploymentId = deployment, OrderId = "1", ClientReference = "0x4" },
                 new OrderDraft { Id = draftId, BuyerUserId = user, DeploymentId = deployment, ClientReference = "0x4", CreatedAt = now },
-                new OrderFile { Id = Guid.NewGuid(), DraftId = draftId, UploadedBy = user, Kind = "product", FileName = "a.zip", Sha256 = "0x5", CreatedAt = now });
+                new OrderFile { Id = Guid.NewGuid(), DraftId = draftId, UploadedBy = user, Kind = "product", FileName = "a.zip", Sha256 = "0x5", CreatedAt = now },
+                new ChatMessage { DraftId = draftId, Seq = 1, SenderUserId = user, SenderRole = "Buyer", Text = "x", CreatedAt = now },
+                new ChatReadState { DraftId = draftId, UserId = user, LastReadSeq = 1 });
             await db.SaveChangesAsync();
 
             var result = await DemoReset.RunAsync(db, default);
@@ -77,6 +79,8 @@ public sealed class DemoResetTests
             Assert.Equal(0m, (await check.LedgerAccounts.SingleAsync(item => item.UserId == user)).BalanceWei);
             Assert.False(await check.LedgerEntries.AnyAsync());
             Assert.False(await check.DepositRequests.AnyAsync());
+            Assert.False(await check.Set<ChatMessage>().AnyAsync());
+            Assert.False(await check.Set<ChatReadState>().AnyAsync());
             Assert.False(await check.Set<OrderFile>().AnyAsync());
             Assert.False(await check.Set<OrderDraft>().AnyAsync());
             Assert.False(await check.Set<ChainEvent>().AnyAsync());

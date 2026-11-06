@@ -89,6 +89,8 @@ Luồng giống một cổng thật, chỉ khác là người dùng tự chọn 
 
 **Tìm đối tác theo email:** form tạo đơn nhận email Seller thay vì địa chỉ ví (`POST /api/orders/party-lookup`, khớp đúng email, cần đăng nhập, có rate limit). Kết quả chỉ trả tên, email đã che và địa chỉ ví để Buyer đối chiếu trước khi lưu. Hai bên thấy nhau theo tên và email che trong chi tiết đơn.
 
+**Trò chuyện trong đơn:** Buyer và Seller trao đổi ngay trong đơn. Arbiter chỉ đọc và trả lời khi có tranh chấp, đơn kết thúc thì chỉ còn đọc, và không có chức năng sửa hoặc xóa tin. Xem `backend/ORDERS.md`.
+
 **Danh sách Arbiter:** Buyer chỉ chọn được Arbiter trong `approvedArbiters` trên contract. Admin thêm hoặc gỡ ở mục **Quản trị** (cần `DEFAULT_ADMIN_ROLE`; riêng `KYC_ADMIN_ROLE` không đủ). Worker đồng bộ danh sách vào bảng `ChainArbiter` để API liệt kê. Gỡ một Arbiter thì các đơn chưa ký quỹ của họ không chấp nhận hay ký quỹ được nữa, và họ mất quyền phân xử ngay; tranh chấp đang mở sẽ được giải quyết bằng cơ chế chia đôi sau 30 ngày nếu không thêm lại họ. Workspace Admin không có mục Đơn hàng nên không phân xử được; hãy chọn một tài khoản thường làm Arbiter.
 
 **Điều khoản soạn sẵn:** nội dung nằm ở `StandardTerms.cs`, có phiên bản, và không được sửa sau khi đã phát hành (thêm phiên bản mới thay vì sửa). Mã hash của nội dung được đưa vào `termsJson`, nên `termsHash` trên chain gắn với đúng văn bản đó; giao diện băm lại văn bản trước khi cho Seller đồng ý. Đồng ý được ghi nhận ở hai nơi: Buyer tích ô khi lưu nháp (API lưu `BuyerAcceptedTermsAt`, từ chối nếu phiên bản không khớp), Seller tích ô rồi ký `acceptOrder` (sự kiện `OrderAccepted` trên chain). Văn bản này là mẫu cho bản demo, chưa được rà soát pháp lý.

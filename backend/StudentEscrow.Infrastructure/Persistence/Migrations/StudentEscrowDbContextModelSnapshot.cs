@@ -443,6 +443,63 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
                     b.ToTable("ChainOrder");
                 });
 
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.ChatMessage", b =>
+                {
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ChainBlock")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("FileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SenderRole")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("SenderUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("DraftId", "Seq");
+
+                    b.HasIndex("FileId");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.ToTable("ChatMessage");
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.ChatReadState", b =>
+                {
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("LastReadSeq")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("DraftId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ChatReadState");
+                });
+
             modelBuilder.Entity("StudentEscrow.Domain.Orders.OrderDraft", b =>
                 {
                     b.Property<Guid>("Id")
@@ -809,6 +866,41 @@ namespace StudentEscrow.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("StudentEscrow.Domain.Ledger.LedgerEntry", b =>
                 {
+                    b.HasOne("StudentEscrow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.ChatMessage", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Orders.OrderDraft", null)
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("StudentEscrow.Domain.Orders.OrderFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("StudentEscrow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StudentEscrow.Domain.Orders.ChatReadState", b =>
+                {
+                    b.HasOne("StudentEscrow.Domain.Orders.OrderDraft", null)
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("StudentEscrow.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

@@ -18,6 +18,7 @@
     "smoke:api": "hardhat run deployment/smoke-api.ts --network localhost --no-compile",
     "smoke:custodial": "hardhat run deployment/smoke-custodial.ts --network localhost --no-compile",
     "smoke:risk": "hardhat run deployment/smoke-risk.ts --network localhost --no-compile",
+    "smoke:chat": "hardhat run deployment/smoke-chat.ts --network localhost --no-compile",
     "smoke:mixed": "hardhat run deployment/smoke-mixed.ts --network localhost --no-compile",
     "verify:api": "hardhat run deployment/verify-api.ts --network localhost --no-compile",
     "export:abi": "hardhat run deployment/export-abi.ts --no-compile"

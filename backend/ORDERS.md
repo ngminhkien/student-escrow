@@ -100,6 +100,21 @@ Tạo bản nháp bằng `sellerEmail`, `arbiter` lấy từ `GET /api/orders/ar
 
 Không dùng `clientReference` hoặc transaction hash làm bằng chứng thanh toán. Worker tự lọc log theo contract/block, giải mã và đối chiếu tất cả điều khoản với draft. Sai bất kỳ field nào: `termsMatch=false` và upload bị chặn. Không có API nhận trạng thái tiền từ client. Người không thuộc đơn nhận 404; chưa có ví liên kết nhận 409.
 
+### Trò chuyện trong đơn
+
+| API | Dùng để |
+|---|---|
+| `GET /api/orders/{id}/chat` | 100 tin mới nhất. `?afterSeq=` lấy tin mới, `?beforeSeq=` lấy tin cũ hơn. Kèm trạng thái đơn, `canSend` và sự kiện chain |
+| `POST /api/orders/{id}/chat` | Gửi `{ text, fileId }`. `fileId` phải là file bằng chứng do chính người gửi tải lên đơn này |
+| `POST /api/orders/{id}/chat/read` | Đánh dấu đã đọc đến `seq` |
+| `GET /api/orders/chat/unread` | Số tin chưa đọc theo từng đơn |
+
+Buyer và Seller đọc được từ lúc tạo đơn và gửi được cho đến khi đơn kết thúc. Arbiter chỉ đọc khi `Disputed` hoặc `Resolved`, và chỉ gửi khi `Disputed`. Người ngoài nhận 404. Không có API sửa hoặc xóa tin.
+
+Tin hệ thống lấy từ sự kiện chain đã xác thực. Thứ tự với tin nhắn dựa trên số block đã đồng bộ lúc gửi (`chainBlock`), không dựa trên thời gian, vì đồng hồ của chain local có thể chạy nhanh hơn đồng hồ máy.
+
+Kiểm tra trên hệ thống thật: `cd blockchain; npm run smoke:chat`. Đặt `SMOKE_CHAT_PERF_DB` là tên database thử để đo thêm với 5.000 tin; xem đầu tệp `smoke-chat.ts`.
+
 ## File và giới hạn
 
 - Một ZIP sản phẩm <=50.000.000 byte, không rỗng; chỉ Seller upload ở Funded với điều khoản khớp. Bản này không có thay thế/xóa file, kể cả trước Delivered; chọn ZIP cuối cùng trước khi upload.

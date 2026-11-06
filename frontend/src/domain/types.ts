@@ -36,6 +36,11 @@ export type OrderView = {
   parties?: { buyer: OrderParty | null; seller: OrderParty | null; arbiter: OrderParty | null };
 };
 export type ChainEvent = { name: string; blockNumber: number; transactionHash: string; logIndex: number; payload: string };
+export type ChatFile = { id: string; fileName: string; length: number };
+export type ChatMessage = { seq: number; senderRole: string; mine: boolean; text: string; file: ChatFile | null; chainBlock: number; createdAt: string };
+export type ChatEvent = { name: string; blockNumber: number; logIndex: number };
+export type ChatPage = { role: string; state: string; canSend: boolean; latestSeq: number; messages: ChatMessage[]; events: ChatEvent[] };
+export type ChatUnread = { draftId: string; count: number };
 export type TxRecord = { hash: string; label: string; deploymentId: string; address: string; status: string; phase?: "pending" | "confirmed" | "failed" | "cancelled" | "unknown" };
 export type RunAction = (label: string, action: () => Promise<void>, options?: { inlineError?: boolean }) => Promise<void>;
 export interface LoginRequest { email: string; password: string }

@@ -4,6 +4,7 @@ import { useOrders } from "./useOrders";
 import { useOrderDetail } from "./useOrderDetail";
 import DraftForm from "./DraftForm";
 import OrderList from "./OrderList";
+import { useChatUnread } from "./useOrderChat";
 import OrderDetail from "./OrderDetail";
 import { sameAddress } from "../../domain/rules";
 import { Icon } from "../../shared/ui/Icon";
@@ -16,6 +17,7 @@ export default function OrdersPage(props: OrdersProps) {
   const listScroll = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const orders = useOrders(props.session.accessToken, props.network.deploymentId, props.revision);
+  const unread = useChatUnread(props.session.accessToken);
   const detail = useOrderDetail(props.session.accessToken, uuid.test(selected) ? selected : "", props.network.deploymentId, props.revision);
   const roleOf = (draft: { buyer: string; seller: string; arbiter: string }) => sameAddress(props.account, draft.seller) ? "seller" : sameAddress(props.account, draft.arbiter) ? "arbiter" : "buyer";
   const workspace = props.arbiterOnly ? "arbiter" : workspaceChoice ?? (detail.view ? roleOf(detail.view.draft) : orders.rows.some(row => sameAddress(props.account, row.draft.buyer)) ? "buyer" : orders.rows[0] ? roleOf(orders.rows[0].draft) : "buyer");
@@ -49,7 +51,7 @@ export default function OrdersPage(props: OrdersProps) {
         {orders.error && <p className="banner" role="alert">{orders.error} <button className="secondary" onClick={orders.refresh}>Thử lại</button></p>}
         {orders.loading && <p role="status">Đang tải đơn…</p>}
         {!orders.loading && !orders.error && !visibleOrders.length && <div className="empty-state"><Icon name="orders" size={28} /><h3>{workspace === "seller" ? "Chưa có đơn bán" : workspace === "arbiter" ? "Chưa có đơn nào chọn bạn làm Arbiter" : "Chưa có đơn hàng"}</h3></div>}
-        {!!visibleOrders.length && <OrderList orders={visibleOrders} account={props.account} selected={selected} choose={choose} />}
+        {!!visibleOrders.length && <OrderList orders={visibleOrders} account={props.account} selected={selected} choose={choose} unread={unread} />}
         {orders.hasMore && <button className="secondary" disabled={orders.loading} onClick={orders.more}>Xem thêm 50 đơn</button>}
         <details><summary>Mở bằng mã đơn</summary><form className="inline-form" onSubmit={event => { event.preventDefault(); const id = String(new FormData(event.currentTarget).get("id") ?? "").trim(); if (uuid.test(id)) choose(id); else setOpenError("Mã đơn phải là UUID hợp lệ của bản nháp."); }}><label>Mã bản nháp<input name="id" required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" aria-invalid={!!openError} aria-describedby="open-order-error" /></label><button className="secondary">Mở mã đơn</button></form><p id="open-order-error" role={openError ? "alert" : undefined}>{openError}</p></details>
       </section>

@@ -6,5 +6,6 @@ export default function OrderRules() {
     <li>Quá hạn giao mà chưa bàn giao: Buyer có thể hoàn tiền. Hết hạn phản hồi: Seller có thể nhận tiền nếu không có tranh chấp.</li>
     <li>Arbiter phân xử khi có tranh chấp. Arbiter mặc định là Admin của nền tảng, cũng là ví nhận phí 1% trên phần Seller được nhận. Arbiter bị gỡ khỏi danh sách thì không phân xử được nữa. Quá 30 ngày không phân xử, một trong hai bên có thể yêu cầu chia đôi số tiền. Bằng chứng hỗ trợ PNG/JPG/JPEG/PDF, tối đa 5 MB/file và 5 file/đơn. Tổng dung lượng đơn tối đa 75 MB.</li>
     <li>Phí nền tảng là 1% phần tiền Seller được hưởng; tỷ giá hiển thị cố định 1 ETH = 100.000.000 ₫.</li>
+    <li>Trò chuyện trong đơn được lưu lại, không sửa hoặc xóa được. Arbiter chỉ đọc được khi đơn có tranh chấp.</li>
   </ol></details>;
 }

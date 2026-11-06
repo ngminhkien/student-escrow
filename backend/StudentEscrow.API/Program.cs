@@ -128,6 +128,7 @@ risk.SyntheticDataPath = Path.GetFullPath(risk.SyntheticDataPath, builder.Enviro
 builder.Services.AddSingleton(risk);
 builder.Services.AddSingleton<IRiskModel>(services => new MlRiskModel(risk.ModelDirectory, services.GetRequiredService<ILogger<MlRiskModel>>()));
 builder.Services.AddScoped<RiskService>();
+builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -173,6 +174,15 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("orders", context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 240, Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0, AutoReplenishment = true }));
+    // Room for several open tabs polling every 3 seconds, plus the unread badge.
+    options.AddPolicy("chat-read", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 240, Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0, AutoReplenishment = true }));
+    options.AddPolicy("chat-send", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0, AutoReplenishment = true }));
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",

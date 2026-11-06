@@ -11,6 +11,7 @@ import OrderWorkflow from "./OrderWorkflow";
 import { Icon } from "../../shared/ui/Icon";
 import OrderRules from "./OrderRules";
 import OrderRisk from "./OrderRisk";
+import OrderChat from "./OrderChat";
 import { sameAddress } from "../../domain/rules";
 import { isAdminAccount } from "../../domain/access";
 import { Copyable } from "../../shared/ui/CopyButton";
@@ -45,6 +46,9 @@ export default function OrderDetail(props: OrdersProps & { view: OrderView; onRe
       {isAdminAccount(props.session) && <OrderRisk token={props.session.accessToken} orderId={draft.id} state={view.chain?.state ?? "Draft"} isArbiter={sameAddress(draft.arbiter, props.account)} />}
       <OrderRules />
     </aside></div>
+    {sameAddress(draft.arbiter, props.account) && !["Disputed", "Resolved"].includes(view.chain?.state ?? "")
+      ? <p className="muted order-chat-note">Arbiter chỉ vào trò chuyện khi đơn có tranh chấp.</p>
+      : <OrderChat key={draft.id} token={props.session.accessToken} view={view} onFilesChanged={props.onRefresh} />}
     <div className="order-diagnostics"><details><summary>Chi tiết đồng bộ</summary><p>Đồng bộ worker: <strong>{view.syncStatus}</strong></p><p>Block đã lập chỉ mục: {view.lastIndexedBlock} · Mã đơn trên chain: {view.chain?.orderId ?? "chưa có"}</p><p>Thời gian blockchain: {date(chainTime)}</p></details>
       <details><summary>Hash và nội dung điều khoản</summary><p className="mono small">Reference: {draft.clientReference}</p><p className="mono small">SHA-256: {draft.termsHash}</p><pre>{draft.termsJson}</pre></details>
     </div>
